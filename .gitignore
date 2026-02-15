@@ -15,3 +15,7 @@ vectorvue.db
 # Python Cache
 __pycache__/
 *.pyc
+
+serialyzer.py
+codebase.txt
+example.md
