@@ -42,7 +42,6 @@ class VimDataTable(DataTable):
 class MitreIntelligenceView(Container):
     """
     Integrated View for MITRE ATT&CK Knowledge Base.
-    Replaces the modal lookup screen.
     """
     CSS = """
     MitreIntelligenceView {
@@ -100,12 +99,10 @@ class MitreIntelligenceView(Container):
             super().__init__()
 
     def compose(self) -> ComposeResult:
-        # Search Bar
         with Container(id="mitre-search-bar"):
             yield Label("[bold cyan]MITRE ATT&CK SEARCH[/]")
             yield Input(placeholder="Search ID (T1000) or Name...", id="mitre-search-input")
 
-        # Split View (Table + Preview)
         with Container(id="mitre-split-container"):
             with Vertical(id="mitre-table-pane"):
                 yield VimDataTable(id="mitre-table", cursor_type="row")
@@ -129,23 +126,16 @@ class MitreIntelligenceView(Container):
     def populate_table(self, query):
         dt = self.query_one("#mitre-table", VimDataTable)
         dt.clear()
-        
-        # Access IntelligenceEngine from the main App
         if hasattr(self.app, "intel"):
             results = self.app.intel.search_techniques(query)
             for t in results:
-                # Store full object in key for retrieval
                 dt.add_row(t.id, t.name, key=t.id)
 
     @on(DataTable.RowHighlighted, "#mitre-table")
     def on_row_highlighted(self, event):
-        """Update preview pane when moving through the list"""
-        if not event.row_key.value:
-            return
-            
+        if not event.row_key.value: return
         tech_id = event.row_key.value
         technique = self.app.intel.lookup_mitre(tech_id)
-        
         preview = self.query_one("#mitre-preview-content")
         if technique:
             content = (
@@ -157,11 +147,67 @@ class MitreIntelligenceView(Container):
 
     @on(DataTable.RowSelected, "#mitre-table")
     def on_row_selected(self, event):
-        """Handle selection (Enter/Click)"""
         tech_id = event.row_key.value
         technique = self.app.intel.lookup_mitre(tech_id)
         if technique:
             self.post_message(self.TechniqueSelected(technique.id, technique.name))
+
+class ShutdownConfirmationView(Container):
+    """
+    Non-modal view to confirm shutdown.
+    Replaces the previous ModalScreen approach to avoid rendering issues.
+    """
+    CSS = """
+    ShutdownConfirmationView {
+        align: center middle;
+        background: $bg-void;
+        height: 100%;
+        border-right: heavy $e-cyan;
+    }
+    #confirm-box {
+        width: 60;
+        height: auto;
+        background: #111;
+        border: heavy $r-alert;
+        padding: 2;
+        text-align: center;
+    }
+    .warn-title {
+        color: $r-alert;
+        text-style: bold;
+        margin-bottom: 2;
+        width: 100%;
+    }
+    .warn-text {
+        color: white;
+        margin-bottom: 2;
+        width: 100%;
+    }
+    #shutdown-btn-row {
+        align: center middle;
+        height: 5;
+    }
+    #shutdown-btn-row Button {
+        width: 16;
+        margin: 0 2;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Container(id="confirm-box"):
+            yield Label("⚠️ TERMINATION SEQUENCE INITIATED", classes="warn-title")
+            yield Label("Unsaved buffer data may be compromised.\nProceed with system halt?", classes="warn-text")
+            with Horizontal(id="shutdown-btn-row"):
+                yield Button("EXECUTE", id="btn-conf-exec", variant="error")
+                yield Button("ABORT", id="btn-conf-abort", variant="primary")
+
+    @on(Button.Pressed, "#btn-conf-exec")
+    def execute_shutdown(self):
+        self.app.push_screen(ShutdownScreen())
+
+    @on(Button.Pressed, "#btn-conf-abort")
+    def abort_shutdown(self):
+        self.app.action_return_to_editor()
 
 class HeaderHUD(Static):
     """Top Banner with Project & File Info"""
@@ -170,7 +216,6 @@ class HeaderHUD(Static):
     def compose(self) -> ComposeResult:
         with Horizontal():
             yield Label("VECTORVUE v2.4 [TACTICAL]", classes="hud-title")
-            # Project Input in Header
             yield Label(" PROJECT:", classes="hud-label-sm")
             yield Input(value="DEFAULT", id="hud-project-input", classes="hud-input")
             yield Label(f"// BUFFER: {self.current_file}", id="hud-file-lbl", classes="hud-file")
@@ -183,7 +228,7 @@ class HeaderHUD(Static):
                 pass
 
 class ShutdownScreen(Screen):
-    """Cinematic Exit Screen"""
+    """Cinematic Exit Screen (Final State)"""
     def compose(self) -> ComposeResult:
         with Container(id="shutdown-container"):
             yield Label("[bold white]INITIATING SHUTDOWN SEQUENCE[/]", classes="shutdown-header")
@@ -206,10 +251,16 @@ class ShutdownScreen(Screen):
     async def run_shutdown_sequence(self):
         await asyncio.sleep(0.5)
         if self.app.db: self.app.db.close()
-        self.query_one("#st-db").update("[LOCKED]").add_class("status-done")
+        
+        lbl_db = self.query_one("#st-db")
+        lbl_db.update("[LOCKED]")
+        lbl_db.add_class("status-done")
         
         await asyncio.sleep(0.5)
-        self.query_one("#st-fs").update("[SECURE]").add_class("status-done")
+        
+        lbl_fs = self.query_one("#st-fs")
+        lbl_fs.update("[SECURE]")
+        lbl_fs.add_class("status-done")
         
         await asyncio.sleep(0.5)
         self.query_one("#final-msg").visible = True
@@ -268,8 +319,11 @@ class CyberTUI(App):
             # 2. File Manager View
             yield FileManagerView(id="fm-view")
 
-            # 3. MITRE Intelligence View (New)
+            # 3. MITRE Intelligence View
             yield MitreIntelligenceView(id="mitre-view")
+
+            # 4. Shutdown Confirmation View (Replaces Modal)
+            yield ShutdownConfirmationView(id="shutdown-view")
 
         # Sidebar / Tooling
         with Container(id="lateral-tools"):
@@ -322,7 +376,9 @@ class CyberTUI(App):
         self.query_one("#editor-main").focus()
 
     def action_quit_app(self):
-        self.push_screen(ShutdownScreen())
+        # Switch to the integrated shutdown confirmation view
+        self.query_one("#view-switcher").current = "shutdown-view"
+        self.update_status("WARNING: TERMINATION REQUESTED", CyberColors.RED_ALERT)
 
     def update_status(self, msg, color="#ffffff"):
         bar = self.query_one("#status-bar")
@@ -360,18 +416,13 @@ class CyberTUI(App):
     @on(MitreIntelligenceView.TechniqueSelected)
     def on_mitre_selected(self, message: MitreIntelligenceView.TechniqueSelected):
         """Handler for when a user selects a technique from the integrated view"""
-        # 1. Update Inputs
         self.query_one("#inp-mitre").value = message.technique_id
         
-        # Only overwrite title if it's empty to avoid wiping user work
         current_title = self.query_one("#inp-title").value
         if not current_title:
             self.query_one("#inp-title").value = message.technique_name
         
-        # 2. Switch back to editor
         self.action_return_to_editor()
-        
-        # 3. Notify
         self.update_status(f"IMPORTED: {message.technique_id}", CyberColors.ELECTRIC_CYAN)
 
     # --- PROJECT LOGIC ---
@@ -380,13 +431,13 @@ class CyberTUI(App):
         val = event.value.strip()
         if not val: val = "DEFAULT"
         self.current_project_id = val
-        self.new_entry() # Clear editor to prevent cross-contamination
+        self.new_entry() 
         self.refresh_list()
         self.update_status(f"PROJECT ACTIVE: {self.current_project_id}", CyberColors.ELECTRIC_CYAN)
 
     def refresh_list(self):
         lv = self.query_one("#findings-list", ListView)
-        lv.clear() # CRITICAL: Explicitly clear before reloading
+        lv.clear() 
         findings = self.db.get_findings(project_id=self.current_project_id)
         for f in findings:
             lv.append(FindingItem(f))
@@ -405,14 +456,13 @@ class CyberTUI(App):
         elif bid == "btn-nist": self.load_nist_template()
 
     def load_nist_template(self):
-        # Loads the NIST 800-115 Skeleton into the editor
         self.new_entry()
         template = NIST_800_115_SKELETON.replace("[DATE]", datetime.now().strftime("%Y-%m-%d"))
         self.query_one("#editor-main").load_text(template)
         self.query_one("#inp-title").value = f"NIST_Report_{self.current_project_id}"
         self.update_status("NIST TEMPLATE LOADED", CyberColors.PHOSPHOR_GREEN)
 
-    # --- CORE LOGIC (CVSS, MITRE, FILES) ---
+    # --- CORE LOGIC ---
     @on(Input.Changed, "#inp-vector")
     def on_vector(self, event):
         score = CVSSCalculator.calculate(event.value)
@@ -438,7 +488,6 @@ class CyberTUI(App):
         
         sev.update(txt); sev.add_class(cls); sc.add_class(cls)
 
-    # MITRE Input Handler (Direct typing in Sidebar)
     @on(Input.Changed, "#inp-mitre")
     def on_mitre_text(self, event):
         val = event.value.strip().upper()
@@ -462,7 +511,7 @@ class CyberTUI(App):
             cvss_score=score,
             mitre_id=self.query_one("#inp-mitre").value,
             tactic_id="", status="Open",
-            project_id=self.current_project_id, # STRICT PROJECT ID SAVE
+            project_id=self.current_project_id,
             cvss_vector=self.query_one("#inp-vector").value
         )
         
@@ -492,7 +541,7 @@ class CyberTUI(App):
     def on_file(self, event):
         success, content, _ = FileSystemService.read_file(event.path)
         if success:
-            self.new_entry() # Prepare UI
+            self.new_entry() 
             self.query_one("#editor-main").load_text(content)
             self.query_one("#inp-title").value = event.path.name
             self.query_one("#view-switcher").current = "editor-view"
