@@ -3,9 +3,9 @@
 # VectorVue Complete Roadmap: Phase 0-8
 
 **Version:** v4.1 Production Ready  
-**Last Updated:** February 18, 2026  
-**Phases Complete:** 0-7 complete (7A API + 7B Portal + 7C Analytics)  
-**Total Code Lines:** 27,000+ lines (Phases 0-7, infra included)  
+**Last Updated:** February 19, 2026  
+**Phases Complete:** 0-7.5.0 complete (7A API + 7B Portal + 7C Analytics + 7.5.0 Telemetry)  
+**Total Code Lines:** 27,000+ lines (Phases 0-7.5.0, infra included)  
 
 ---
 
@@ -23,6 +23,7 @@ VectorVue is evolving from a single-operator red team notebook into an enterpris
 - **Phase 6:** Deployment & Hardening (systemd, TLS, air-gap, production hardening)
 - **Phase 6.5:** Tenant Isolation & Client REST API (tenant guard, JWT tenant claim, read-only API contract)
 - **Phase 7:** Client Portal (Web UI, read-only views, remediation tracking)
+- **Phase 7.5.0:** Portal Usage Telemetry (defensive-intelligence event capture for Phase 8 model data)
 - **Phase 8:** ML/Analytics (Attack prediction, anomaly learning)
 
 ---
@@ -996,7 +997,7 @@ Goal: make Phase 7 safe and deployable per customer without redesign later.
 
 ---
 
-## 🌐 PHASE 7: Client Portal (Web UI) ✅ COMPLETE
+## 🌐 PHASE 7 / 7.5.0: Client Portal + Usage Telemetry ✅ COMPLETE
 
 **Completed:** February 18, 2026 | **Estimated Lines:** 2,000+ | **Status:** `Complete`
 
@@ -1080,6 +1081,15 @@ Progressive rollout recommended:
 * [x] Timeline tracking
 * [x] Owner assignment column (UI-ready fallback)
 * [x] Completion verification marking
+
+### 7.5.0 Portal Usage Telemetry (Phase 8 Dataset Foundation)
+
+* [x] `client_activity_events` tenant-scoped telemetry table
+* [x] Event taxonomy: finding/report/dashboard/remediation interactions
+* [x] Async non-blocking ingestion endpoint (`POST /api/v1/client/events`)
+* [x] Basic rate limiting and privacy-safe metadata filtering
+* [x] Frontend instrumentation hooks (`portal/lib/telemetry.ts`)
+* [x] MTTA and MTTR reference queries for defensive effectiveness analytics
 
 ### 7.6 Web UI Features
 
@@ -1197,17 +1207,17 @@ Defensive effectiveness models (customer-sellable analytics)
 * Tenant isolation verified
 * Evidence publishing safe
 
-### Phase 7 → 8
+### Phase 7.5.0 → 8
 
 * Client portal deployed
-* Historical datasets accumulated
-* Analytics dataset validated
+* Historical portal-usage datasets accumulated
+* Defensive analytics dataset validated
 
 ---
 
 ## 💰 Business Alignment Result
 
-**After Phase 7:**
+**After Phase 7 / 7.5.0:**
 You sell **Continuous Adversary Validation Portal**
 
 **After Phase 8:**
@@ -1230,7 +1240,7 @@ You sell **Security Effectiveness Intelligence Platform**
 ### Performance Risks
 - ✅ Phase 2: Async task execution (RuntimeExecutor)
 - Phase 3: Report generation offload to queue
-- Phase 7: API pagination for large datasets
+- Phase 7.5.0: Portal telemetry event volume validation for large datasets
 
 ### Scalability Risks
 - ✅ Phase 2: SQLite → PostgreSQL upgrade path
@@ -1242,10 +1252,10 @@ You sell **Security Effectiveness Intelligence Platform**
 
 ## Conclusion
 
-VectorVue's evolution represents a systematic transformation from a single-operator tool to an enterprise-grade campaign management platform. Phases 0-5.5 and 5.6 deliver operational cognition, database migration to PostgreSQL, and container deployment baseline. Phases 6-8 extend hardened deployment, client-facing portal workflows, and predictive analytics.
+VectorVue's evolution represents a systematic transformation from a single-operator tool to an enterprise-grade campaign management platform. Phases 0-5.5 and 5.6 deliver operational cognition, database migration to PostgreSQL, and container deployment baseline. Phases 6-7.5.0 extend hardened deployment, client-facing portal workflows, and defensive telemetry datasets for predictive analytics.
 
-**Current Status:** Phase 7 Complete ✅ | **Production Ready:** Yes | **Estimated Full Completion:** Q1 2027
+**Current Status:** Phase 7.5.0 Complete ✅ | **Production Ready:** Yes | **Estimated Full Completion:** Q1 2027
 
 ---
 
-**VectorVue Roadmap** | Last Updated: February 18, 2026 | Maintained by: Internal Engineering Team
+**VectorVue Roadmap** | Last Updated: February 19, 2026 | Maintained by: Internal Engineering Team

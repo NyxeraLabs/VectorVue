@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import RiskCard from '@/components/RiskCard';
 import SeverityChart from '@/components/SeverityChart';
 import TrendChart from '@/components/TrendChart';
+import { trackDashboardView } from '@/lib/telemetry';
 import type { RiskSummary } from '@/lib/types';
 
 type TrendPoint = { day: string; score: number };
@@ -22,6 +23,10 @@ export default function RiskPage() {
   const [remediation, setRemediation] = useState<RemediationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackDashboardView('risk');
+  }, []);
 
   useEffect(() => {
     let active = true;

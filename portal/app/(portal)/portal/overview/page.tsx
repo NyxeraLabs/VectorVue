@@ -14,6 +14,7 @@ import {
 import RiskCard from '@/components/RiskCard';
 import TrendChart from '@/components/TrendChart';
 import { Card } from '@/components/ui/card';
+import { trackDashboardView } from '@/lib/telemetry';
 import type { ClientFinding, ClientReport, Paginated, RemediationTask, RiskSummary } from '@/lib/types';
 
 type TrendPoint = { day: string; score: number };
@@ -66,6 +67,10 @@ export default function OverviewPage() {
   const [remediationSummary, setRemediationSummary] = useState<RemediationSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    trackDashboardView('overview');
+  }, []);
 
   useEffect(() => {
     let active = true;
