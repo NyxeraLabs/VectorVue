@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
+import { trackFindingAcknowledged, trackFindingView } from '@/lib/telemetry';
 import type { ClientEvidenceItem, ClientFindingDetail } from '@/lib/types';
 
 type EvidenceResponse = { finding_id: number; items: ClientEvidenceItem[] };
@@ -42,6 +43,15 @@ export default function FindingDetailPage({ params }: { params: { id: string } }
       active = false;
     };
   }, [params.id]);
+
+  useEffect(() => {
+    if (!finding?.id) return;
+    trackFindingView(finding.id, finding.cvss_score ?? null);
+    const timer = window.setTimeout(() => {
+      trackFindingAcknowledged(finding.id, finding.cvss_score ?? null);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [finding]);
 
   if (loading) return <p className="text-sm text-muted">Loading finding detail...</p>;
   if (error || !finding) return <p className="text-sm text-red-400">Unable to load finding detail: {error ?? 'unknown'}</p>;

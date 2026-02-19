@@ -25,7 +25,7 @@ Previous versions remain under the original license.
 
 ![Status](https://img.shields.io/badge/Status-Operational-39FF14)
 ![Version](https://img.shields.io/badge/Version-4.1-00FFFF)
-![Maturity](https://img.shields.io/badge/Maturity-Phase_7_Complete-39FF14)
+![Maturity](https://img.shields.io/badge/Maturity-Phase_7.5.0_Complete-39FF14)
 ![Cognition](https://img.shields.io/badge/Cognition-Operational-39FF14)
 ![Security](https://img.shields.io/badge/Audit-Traceable-purple)
 ![Evidence](https://img.shields.io/badge/Evidence-Defensible-blue)
@@ -72,13 +72,14 @@ See [Tab Navigation Guide](docs/TAB_NAVIGATION_GUIDE.md) for complete documentat
 ## Documentation
 
 - Unified docs entrypoint: [Documentation Index](docs/manuals/INDEX.md)
-- Full commercial guide: [VectorVue User Guide](docs/manuals/VECTORVUE_USER_GUIDE.md)
-- PostgreSQL migration: [PostgreSQL Migration Guide](docs/manuals/POSTGRES_MIGRATION_GUIDE.md)
-- PostgreSQL operations: [PostgreSQL Usage Guide](docs/manuals/POSTGRES_USAGE_GUIDE.md)
+- Client portal usage (step-by-step): [Client Portal Manual](docs/manuals/CLIENT_PORTAL_MANUAL.md)
+- Demo users, URLs, and live walkthrough: [Demo Access Matrix](docs/manuals/DEMO_ACCESS_MATRIX.md)
+- API integration runbook: [Client API Manual](docs/manuals/CLIENT_API_MANUAL.md)
+- Telemetry operations and privacy model: [Portal Telemetry Manual](docs/manuals/PORTAL_TELEMETRY_MANUAL.md)
 - Deployment and hardening: [Deployment Guide](docs/manuals/Deployment.md)
-- Tenant-safe API operations: [Client API Manual](docs/manuals/CLIENT_API_MANUAL.md)
-- Client portal operations: [Client Portal Manual](docs/manuals/CLIENT_PORTAL_MANUAL.md)
-- Phase 6.5 quickstart: [API Quickstart](docs/PHASE65_API_QUICKSTART.md)
+- PostgreSQL operations: [PostgreSQL Usage Guide](docs/manuals/POSTGRES_USAGE_GUIDE.md)
+- Full product guide: [VectorVue User Guide](docs/manuals/VECTORVUE_USER_GUIDE.md)
+- Telemetry analytics SQL examples: [Telemetry Queries](docs/manuals/PHASE7E_TELEMETRY_QUERIES.sql)
 
 ## Maturity Model
 
@@ -90,7 +91,7 @@ See [Tab Navigation Guide](docs/TAB_NAVIGATION_GUIDE.md) for complete documentat
 | Cognition | Guide decisions      | ✅ Complete (v4.1) |
 | PostgreSQL Migration | Database + container baseline | ✅ Complete (v4.1, Phase 5.6) |
 | Deployment & Hardening | Production-ready secure deployment | ✅ Complete (v4.1, Phase 6) |
-| Autonomy  | Supervised execution | 🔮 Phase 7+ |
+| Autonomy  | Supervised execution | 🔮 Phase 8+ |
 | **UI Navigation** | **Visual tabs for all views** | **✅ Complete (v4.1+)** |
 
 Current state:
@@ -102,6 +103,9 @@ Current state:
 **Phase 7 — Client Portal + Analytics (complete)** ✅
 Client portal includes findings timeline, JSON/CSV export, remediation tracking with verification state,
 polling notifications, multilingual toggle (EN/ES), and brandable UI variables.
+**Phase 7.5.0 — Portal Usage Telemetry (complete)** ✅
+Client telemetry now captures finding views/acknowledgements, remediation actions, report downloads,
+and dashboard consultation frequency for Phase 8 defensive-effectiveness model datasets.
 
 ## Multi-Tenant Demo Seed (v4.1)
 
@@ -139,6 +143,27 @@ make customer-deploy-isolated \
 ```
 
 Run another tenant with a different `CUSTOMER` and different host ports.
+
+## Quick Start (Operator + Client Demo)
+
+1. Deploy:
+```bash
+make deploy
+```
+2. Seed demo data:
+```bash
+make seed-clients
+```
+3. Open portal:
+   - `https://acme.vectorvue.local/login`
+   - `https://globex.vectorvue.local/login`
+4. Login with viewer account from `docs/manuals/DEMO_ACCESS_MATRIX.md`.
+5. Walk pages in order:
+   - `Overview`
+   - `Findings`
+   - `Reports`
+   - `Remediation`
+   - `Risk`
 
 ---
 
@@ -333,7 +358,8 @@ The purpose is defense improvement.
 
 Phase 5.5 — Operational cognition ✅ **COMPLETE**
 Phase 6 — Deployment & hardening ✅ **COMPLETE**
-Phase 7 — Client portal (web UI)
+Phase 7 — Client portal (web UI) ✅ **COMPLETE**
+Phase 7.5.0 — Portal usage telemetry ✅ **COMPLETE**
 Phase 8 — Supervised autonomy & analytics
 
 ---

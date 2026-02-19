@@ -1,6 +1,6 @@
 <sub>Copyright (c) 2026 José María Micoli | Licensed under {'license_type': 'BSL1.1', 'change_date': '2033-02-17'}</sub>
 
-# VectorVue Deployment & Hardening Guide (Phase 6 / 6.5)
+# VectorVue Deployment & Hardening Guide (Phase 6 / 6.5 / 7.5.0)
 
 ## Scope
 
@@ -52,7 +52,7 @@ Output location: `deploy/certs/`.
 
 - `server.crt` + `server.key`: nginx TLS termination (and optional PostgreSQL TLS)
 - `ca.crt`: trust anchor
-- `client.crt` + `client.key`: Phase 7 mTLS test client
+- `client.crt` + `client.key`: Phase 7/7.5.0 mTLS test client
 
 Certificates are mounted into containers read-only.
 
@@ -164,7 +164,7 @@ mTLS is prepared with:
 - `ssl_client_certificate /etc/nginx/certs/ca.crt`
 - `ssl_verify_client optional`
 
-For strict mTLS in Phase 7, switch to:
+For strict mTLS in Phase 7/7.5.0, switch to:
 
 ```nginx
 ssl_verify_client on;
@@ -264,7 +264,7 @@ Container defaults also enforce color parity:
 - `COLORTERM=truecolor`
 - `FORCE_COLOR=1`
 
-## 13. Phase 7 and Phase 8 Integration Readiness
+## 13. Phase 7.5.0 and Phase 8 Integration Readiness
 
 Phase 6/6.5 outputs required for next phases:
 - PostgreSQL stable backend in production stack
@@ -273,3 +273,4 @@ Phase 6/6.5 outputs required for next phases:
 - Containerized deployment with hardened defaults
 - Centralized logs and audit trail preservation
 - Tenant-isolated read-only REST API contract for customer portal
+- Portal usage telemetry ingestion path (`POST /api/v1/client/events`) for defensive dataset accumulation

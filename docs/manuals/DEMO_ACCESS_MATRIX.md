@@ -5,6 +5,10 @@
 ## Scope
 
 This page documents the default demo identities provisioned by `make seed-clients`.
+Use it as the fast reference for:
+- who logs in where
+- which credentials to use
+- the recommended 10-minute demo flow
 
 ## Seeded Identity Model
 
@@ -14,6 +18,7 @@ This page documents the default demo identities provisioned by `make seed-client
 - Client Panel 1 tenant with two client portal users
 - Client Panel 2 tenant with two client portal users
 - Two campaigns per client tenant (4 total)
+- portal telemetry schema for defensive analytics datasets
 
 ## Default Accounts
 
@@ -27,6 +32,7 @@ This page documents the default demo identities provisioned by `make seed-client
 
 - Tenant name: `ACME Industries`
 - Tenant ID: `10000000-0000-0000-0000-000000000001`
+- Portal URL: `https://acme.vectorvue.local/login`
 - `acme_viewer` / `AcmeView3r!` (`viewer`)
 - `acme_operator` / `AcmeOperat0r!` (`operator`)
 
@@ -34,8 +40,31 @@ This page documents the default demo identities provisioned by `make seed-client
 
 - Tenant name: `Globex Corporation`
 - Tenant ID: `20000000-0000-0000-0000-000000000002`
+- Portal URL: `https://globex.vectorvue.local/login`
 - `globex_viewer` / `GlobexView3r!` (`viewer`)
 - `globex_operator` / `GlobexOperat0r!` (`operator`)
+
+## Fast Demo Procedure (10 Minutes)
+
+1. Run seed:
+```bash
+make seed-clients
+```
+2. Open `https://acme.vectorvue.local/login`.
+3. Login as `acme_viewer`.
+4. Walk through:
+   - `Overview`
+   - `Findings` (filter critical, open detail)
+   - `Reports` (download one PDF)
+   - `Remediation`
+   - `Risk`
+5. Logout and repeat on `https://globex.vectorvue.local/login` with `globex_viewer`.
+
+Expected result:
+- clear tenant isolation
+- populated dashboards
+- downloadable reports
+- visible remediation state
 
 ## Makefile Overrides
 
