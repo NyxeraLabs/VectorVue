@@ -48,6 +48,7 @@ Note: host mapping is `5433:5432` in `docker-compose.yml`.
 ```bash
 make pg-reset
 make pg-migrate
+make phase7e-migrate
 make seed-clients
 make pg-smoke
 ```
@@ -79,6 +80,12 @@ Then seed:
 docker compose run --rm vectorvue_app python scripts/seed_db.py \
   --backend postgres \
   --pg-url postgresql://vectorvue:strongpassword@postgres:5432/vectorvue_db
+```
+
+Apply portal telemetry schema (Phase 7.5.0):
+
+```bash
+make phase7e-migrate
 ```
 
 ## Run VectorVue on PostgreSQL

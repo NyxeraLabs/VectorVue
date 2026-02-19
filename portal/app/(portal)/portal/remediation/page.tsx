@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import StatusBadge from '@/components/StatusBadge';
+import { trackRemediationAction } from '@/lib/telemetry';
 import type { RemediationTask } from '@/lib/types';
 
 type RemediationResponse = { items: RemediationTask[] };
@@ -73,7 +74,11 @@ export default function RemediationPage() {
           </thead>
           <tbody>
             {data.map((task) => (
-              <tr key={task.id} className="border-b border-slate-900">
+              <tr
+                key={task.id}
+                className="cursor-pointer border-b border-slate-900"
+                onClick={() => trackRemediationAction(task.id, task.status)}
+              >
                 <td className="px-4 py-3">{task.title}</td>
                 <td className="px-4 py-3">{task.priority ?? 'Medium'}</td>
                 <td className="px-4 py-3">{task.owner ?? 'Unassigned'}</td>
