@@ -6,8 +6,13 @@ export async function proxyClientApi(request: NextRequest, path: string): Promis
   const token = request.cookies.get('vv_access_token')?.value;
   const upstreamHeaders = new Headers();
   const accept = request.headers.get('accept');
+  const contentType = request.headers.get('content-type');
   if (accept) upstreamHeaders.set('accept', accept);
+  if (contentType) upstreamHeaders.set('content-type', contentType);
   if (token) upstreamHeaders.set('Authorization', `Bearer ${token}`);
+  const method = request.method.toUpperCase();
+  const hasBody = method !== 'GET' && method !== 'HEAD';
+  const body = hasBody ? await request.arrayBuffer() : undefined;
 
   const timeoutMs = Number(process.env.VV_PROXY_TIMEOUT_MS ?? 8000);
   const controller = new AbortController();
@@ -16,8 +21,9 @@ export async function proxyClientApi(request: NextRequest, path: string): Promis
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      method: request.method,
+      method,
       headers: upstreamHeaders,
+      body: body && body.byteLength > 0 ? body : undefined,
       cache: 'no-store',
       signal: controller.signal
     });
