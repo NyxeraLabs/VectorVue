@@ -1,0 +1,90 @@
+c80e232 Sync dev into main (squash)
+8fdd6ff Merge branch 'dev' into main
+55b412b Merge branch 'dev'
+df19ec8 Merge branch 'QA' into dev
+189ef44 chore(qa): add legal/branding validation checklist and portal builder QA profile
+38360e5 chore(qa): squash-sync dev into QA
+ce60f65 Merge branch 'dev' into QA
+d9d22da feat(branding): enforce immutable Nyxera/VectorVue attribution while preserving tenant theme customization
+dd3833b feat(compliance): enforce legal acceptance across install, TUI, API, and portal with hash/version revalidation
+e5d5ab7 fix:Makefile
+155fa19 chore(ci): resolve workflow conflict and keep QA branch triggers
+2f25131 fix(ci): trigger workflow on uppercase QA branch name
+ebfb923 feat(integrations): add SpectraStrike ingest API, docs, tests, and CI/CD hardening
+acabf8b fix(ci): skip interactive Next.js lint when portal ESLint config is absent
+122b679 fix(ci): fallback to npm install when portal lockfile is missing
+4f68b12 fix(ci): add httpx dependency required by FastAPI TestClient in unit tests
+9c87b58 ci(cicd): add Python, portal, and Docker validation with automated main release tagging
+0b35749 feat(integrations): add SpectraStrike ingest API with idempotency, status tracking, audits, tests, and docs
+8f2f6a5 Resolve merge: stop tracking .obsidian
+c5d0865 .obsidian untracked
+7c49263 Updated README
+fe48e76 Updated README
+03a18db Transfer Ownership of IP to NyxeraLabs Organization. Author still remain the same: Jose Maria Micoli
+3f40511 QA Testing Suite
+bc5f51d Implemented Help and customer wizard functionalities
+21e769e Phase 9 in progress, added missing license headers and updated documentatin
+edc6854 Added phase-9 to roadmap
+82516db Phase-8 DONE - updated documentation and roadmap
+076cf6b ROADMAP updated
+9fa2790 ROADMAP updated
+4f4526c Phase-7e DONE and Fully documentation updated
+73c03d2 Phase-7 Client Portal Overview Dashboard implemented
+41af863 Phase-7c-7d DONE v4.1
+dcd4331 Phase-7b DONE
+2f6894e Phase-7a DONE
+b8a6988 Phase 6.5 DONE v4.0
+138df92 Updated ROADMAP
+57dd8fc Phase-6 of roadmap done and version 3.9 officialy released
+65306c3 Updated license header too look minimal in documentation files but visible
+0f9e115 Updated license header too loock minimal in documentation files
+3aa75c3 Added License Headers to all files to reflect the License migration from version 3.8
+cfb38fe Phase 5.6 PostGreSQL Dockerized Migration DONE
+03f78c5 Adjusted Login/Register View
+4fe14aa Added toughs for each phase of the ROADMAP
+589d679 Improved the TUI, GROUPS and TABS and also improved docs
+550a2ce Improved the TUI, GROUPS and TABS and also improved docs
+af05379 Phase 5.5 and v3.8 fully implemented under testing
+36e02b9 Updated ROADMAP
+596ec14 Updated docs
+55a43cc Version 3.7.1 published
+ba5d9f5 Update LICENSE and source/docs headers and PHASE 5.5 DONE
+219c048 Update README license notice
+c03d284 Updated bad LICENSE BADGE in README
+636d714 Updated README
+26b6c34 Updated ROADMAP
+b2155f6 Architecture_Spec Doc updated
+f0b0b0c Phase 5.5 Very Important 10 new modules are implemented
+0d77fda Phase-5 Done
+216bcf1 Phase4 Done
+2a10238 Phase3 fixed vv_core.py two warnings
+db6fc0c Phase3 from Roadmap done
+141b084 Updated README fixed banner ASCII art
+2c186d6 Updated README
+55b2757 Updated Documentation, Readme and Roadmap
+32d69b9 Phase 3.5 Done
+ac23756 Phase 3.4 done
+dbef3ce v3.0 first upgrades
+68d688b v2.5 updated
+38ea8ff v2.5 implemented
+78cbc9a SHUTDOWN functionality improved
+f858b7e MITRE INTEL implemented
+900e77f Updated v2.1
+1a72059 Updated README
+c28399d Updated README
+fce81a2 Updated user guide manuals
+d9a57d9 VectorVue v2.1 Released
+d011203 Updated README
+f612e8f Adding PDF Look improvements in progress
+7985fce Corrected mistypo in README.md
+adc63a5 Readme correction part2 splashscreen
+c954a89 Readme correction
+0ad2801 Corrected the splash part2
+657eaa2 Corrected splashscreen
+7f942ff Corrected usage function
+f8b8013 implement finding lifecycle management and golden library v1.6
+b513722 README UPDATED
+e2e9439 v1.3 Implemented with a python interactive shell and full database, directories and PDF generation
+901cbc9 Corrected the file names
+23123d1 Added all the project structure and files and readme
+53eed69 Initial commit
