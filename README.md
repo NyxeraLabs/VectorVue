@@ -91,6 +91,17 @@ Use menu option:
 make deploy
 ```
 
+## Legal & Compliance Enforcement
+
+- `make install` is the production-grade installation path and enforces mandatory legal validation.
+- `make deploy` is for development/testing workflows and does not enforce the legal installer gate.
+
+`make install` requires:
+- Full rendering of all legal documents in sequence.
+- Interactive pagination.
+- Exact case-sensitive confirmation phrase: `I ACCEPT VECTORVUE LEGAL TERMS`.
+- A valid `.vectorvue/legal_acceptance.json` manifest with current hash/version/mode.
+
 **Seed realistic demo data:**
 
 ```bash
