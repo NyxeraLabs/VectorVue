@@ -75,23 +75,23 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="min-h-screen p-6">
+    <main className="min-h-screen bg-bg-primary p-6">
       <Card>
-        <h1 className="mb-2 text-xl font-semibold">Register</h1>
-        <p className="mb-4 text-sm text-muted">Complete legal review before account creation.</p>
-        {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
+        <h1 className="mb-2 text-xl font-semibold text-metallic">Register</h1>
+        <p className="mb-4 text-sm text-text-secondary">Complete legal review before account creation.</p>
+        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
 
-        {!loaded ? <p className="text-sm text-muted">Loading legal documents...</p> : null}
+        {!loaded ? <p className="text-sm text-text-secondary">Loading legal documents...</p> : null}
         {legal ? (
           <section className="mb-6 space-y-4">
             {legal.documents.map((doc, idx) => (
-              <div key={doc.name} className="rounded border border-slate-700 bg-slate-950 p-3">
+              <div key={doc.name} className="rounded-xl border border-[color:var(--vv-border-subtle)] bg-bg-primary p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h2 className="text-sm font-semibold">{doc.name}</h2>
-                  <span className="text-xs text-muted">{scrolled[idx] ? 'Scrolled' : 'Scroll to 95%'}</span>
+                  <span className="text-xs text-text-secondary">{scrolled[idx] ? 'Scrolled' : 'Scroll to 95%'}</span>
                 </div>
                 <div
-                  className="h-44 overflow-y-auto rounded border border-slate-700 bg-black p-3 text-xs"
+                  className="h-44 overflow-y-auto rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-secondary p-3 text-xs"
                   onScroll={(event) => onScrollDoc(idx, event)}
                 >
                   <pre className="whitespace-pre-wrap">{doc.content}</pre>
@@ -106,49 +106,49 @@ export default function RegisterPage() {
           <input type="hidden" name="version" value={legal?.version ?? ''} />
           <input type="hidden" name="deployment_mode" value={legal?.deployment_mode ?? 'self-hosted'} />
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Tenant ID</span>
+            <span className="mb-1 block text-text-secondary">Tenant ID</span>
             <input
               type="text"
               name="tenant_id"
               defaultValue={tenantIdDefault}
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Username</span>
+            <span className="mb-1 block text-text-secondary">Username</span>
             <input
               type="text"
               name="username"
               required
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Password</span>
+            <span className="mb-1 block text-text-secondary">Password</span>
             <input
               type="password"
               name="password"
               required
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Confirm Password</span>
+            <span className="mb-1 block text-text-secondary">Confirm Password</span>
             <input
               type="password"
               name="confirm_password"
               required
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
-          <label className="flex items-start gap-2 text-sm text-muted">
+          <label className="flex items-start gap-2 text-sm text-text-secondary">
             <input type="checkbox" name="accepted" disabled={!allScrolled} className="mt-0.5" />
             <span>I have read and agree to all legal documents.</span>
           </label>
           <button
             type="submit"
             disabled={!allScrolled}
-            className="w-full rounded bg-accent px-4 py-2 font-medium text-slate-950 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-accent px-4 py-2 font-medium text-white shadow-accent-glow transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             Register
           </button>

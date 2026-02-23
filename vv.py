@@ -98,6 +98,8 @@ def _load_readme_banner() -> str:
 
 
 README_ASCII_BANNER = _load_readme_banner()
+BRAND_ATTRIBUTION_LINE_1 = "VectorVue by Nyxera Labs"
+BRAND_ATTRIBUTION_LINE_2 = "© 2026 Nyxera Labs. All rights reserved."
 
 # =============================================================================
 # PHASE 2: RUNTIME EXECUTOR (Background Task Management)
@@ -2801,7 +2803,10 @@ class CyberTUI(App):
             yield Button("LOGOUT",     id="btn-logout",   disabled=True)
             yield Button("SHUTDOWN",   id="btn-exit")
 
-        yield Label("SYSTEM LOCKED - AUTH REQUIRED", id="status-bar")
+        yield Label(
+            f"SYSTEM LOCKED - AUTH REQUIRED | {BRAND_ATTRIBUTION_LINE_1} | {BRAND_ATTRIBUTION_LINE_2}",
+            id="status-bar",
+        )
 
     def on_mount(self):
         self.crypto      = SessionCrypto()
@@ -2958,7 +2963,9 @@ class CyberTUI(App):
     def update_status(self, msg, color="#ffffff"):
         bar = self.query_one("#status-bar")
         ts  = datetime.now().strftime('%H:%M:%S')
-        bar.update(f"[{ts}] {msg}")
+        bar.update(
+            f"[{ts}] {msg} | {BRAND_ATTRIBUTION_LINE_1} | {BRAND_ATTRIBUTION_LINE_2}"
+        )
         bar.styles.color = color
 
     def refresh_editor_preview(self):
