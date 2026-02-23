@@ -47,56 +47,56 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
   const error = renderError(searchParams?.error) ?? (!mappedTenant ? 'Host not mapped. Enter Tenant ID manually.' : null);
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
+    <main className="flex min-h-screen items-center justify-center bg-bg-primary p-6">
       <Card>
-        <h1 className="mb-2 text-xl font-semibold">Client Login</h1>
-        <p className="mb-4 text-sm text-muted">Sign in with your assigned portal credentials.</p>
-        <p className="mb-4 text-xs text-muted">Host: {host ?? 'unknown'}</p>
+        <h1 className="mb-2 text-xl font-semibold text-metallic">Client Login</h1>
+        <p className="mb-4 text-sm text-text-secondary">Sign in with your assigned portal credentials.</p>
+        <p className="mb-4 text-xs text-text-secondary">Host: {host ?? 'unknown'}</p>
         {mappedTenant ? (
-          <p className="mb-4 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-muted">
+          <p className="mb-4 rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-xs text-text-secondary">
             Tenant: {mappedTenant.tenantName ?? mappedTenant.tenantId}
           </p>
         ) : null}
-        {error ? <p className="mb-4 text-sm text-red-400">{error}</p> : null}
+        {error ? <p className="mb-4 text-sm text-danger">{error}</p> : null}
         <form action="/api/auth/login" method="post" className="space-y-3">
           <input type="hidden" name="redirect" value={redirectPath} />
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Tenant ID</span>
+            <span className="mb-1 block text-text-secondary">Tenant ID</span>
             <input
               type="text"
               name="tenant_id"
               defaultValue={mappedTenant?.tenantId ?? ''}
               required={!mappedTenant}
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Username</span>
+            <span className="mb-1 block text-text-secondary">Username</span>
             <input
               type="text"
               name="username"
               required
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted">Password</span>
+            <span className="mb-1 block text-text-secondary">Password</span>
             <input
               type="password"
               name="password"
               required
-              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
+              className="w-full rounded-lg border border-[color:var(--vv-border-subtle)] bg-bg-primary px-3 py-2 text-text-primary"
             />
           </label>
           <button
             type="submit"
-            className="w-full rounded bg-accent px-4 py-2 font-medium text-slate-950 hover:opacity-90"
+            className="w-full rounded-lg bg-accent px-4 py-2 font-medium text-white shadow-accent-glow transition-colors hover:bg-accent-hover"
           >
             Login
           </button>
           <a
             href={mappedTenant?.tenantId ? `/register?tenant_id=${encodeURIComponent(mappedTenant.tenantId)}` : '/register'}
-            className="block text-center text-xs text-muted underline"
+            className="block text-center text-xs text-text-secondary underline"
           >
             Register new account
           </a>

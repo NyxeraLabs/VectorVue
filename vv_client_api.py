@@ -91,13 +91,17 @@ SENSITIVE_METADATA_KEYS = {
 DEFAULT_THEME = {
     "company_name": "VectorVue Customer",
     "logo_path": "",
-    "primary_color": "#0f172a",
-    "accent_color": "#22d3ee",
-    "background_color": "#0b0e14",
-    "foreground_color": "#e5e7eb",
-    "danger_color": "#ef4444",
-    "success_color": "#22c55e",
+    "primary_color": "#121735",
+    "accent_color": "#8A2BE2",
+    "background_color": "#0A0F2D",
+    "foreground_color": "#E6E9F2",
+    "danger_color": "#FF4D4F",
+    "success_color": "#00C896",
     "updated_at": "",
+}
+PLATFORM_ATTRIBUTION = {
+    "line1": "VectorVue by Nyxera Labs",
+    "line2": "© 2026 Nyxera Labs. All rights reserved.",
 }
 
 
@@ -268,20 +272,40 @@ def _client_visible_reports_predicate(reports: Table, tenant_id: str):
 
 
 def _theme_payload(row: dict[str, Any], request: Request) -> dict[str, Any]:
+    def _valid_hex(value: Any, fallback: str) -> str:
+        raw = _safe_scalar({"v": value}, "v", fallback)
+        text = str(raw or "").strip()
+        if len(text) == 7 and text.startswith("#"):
+            try:
+                int(text[1:], 16)
+                return text
+            except Exception:
+                return fallback
+        return fallback
+
+    def _safe_company_name(value: Any) -> str:
+        name = str(value or "").strip()
+        if not name:
+            return DEFAULT_THEME["company_name"]
+        # Guard against rendering abuse in tenant-provided branding labels.
+        return name[:80]
+
     logo_url = None
     if _safe_scalar(row, "logo_path", ""):
         logo_url = build_public_url("/api/v1/client/theme/logo", request)
     return {
-        "company_name": _safe_scalar(row, "company_name", DEFAULT_THEME["company_name"]),
+        "company_name": _safe_company_name(_safe_scalar(row, "company_name", DEFAULT_THEME["company_name"])),
         "logo_url": logo_url,
         "colors": {
-            "primary": _safe_scalar(row, "primary_color", DEFAULT_THEME["primary_color"]),
-            "accent": _safe_scalar(row, "accent_color", DEFAULT_THEME["accent_color"]),
-            "background": _safe_scalar(row, "background_color", DEFAULT_THEME["background_color"]),
-            "foreground": _safe_scalar(row, "foreground_color", DEFAULT_THEME["foreground_color"]),
-            "danger": _safe_scalar(row, "danger_color", DEFAULT_THEME["danger_color"]),
-            "success": _safe_scalar(row, "success_color", DEFAULT_THEME["success_color"]),
+            "primary": _valid_hex(_safe_scalar(row, "primary_color", DEFAULT_THEME["primary_color"]), DEFAULT_THEME["primary_color"]),
+            "accent": _valid_hex(_safe_scalar(row, "accent_color", DEFAULT_THEME["accent_color"]), DEFAULT_THEME["accent_color"]),
+            "background": _valid_hex(_safe_scalar(row, "background_color", DEFAULT_THEME["background_color"]), DEFAULT_THEME["background_color"]),
+            "foreground": _valid_hex(_safe_scalar(row, "foreground_color", DEFAULT_THEME["foreground_color"]), DEFAULT_THEME["foreground_color"]),
+            "danger": _valid_hex(_safe_scalar(row, "danger_color", DEFAULT_THEME["danger_color"]), DEFAULT_THEME["danger_color"]),
+            "success": _valid_hex(_safe_scalar(row, "success_color", DEFAULT_THEME["success_color"]), DEFAULT_THEME["success_color"]),
         },
+        "platform_brand_locked": True,
+        "platform_attribution": dict(PLATFORM_ATTRIBUTION),
     }
 
 
