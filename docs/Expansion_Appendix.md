@@ -161,13 +161,13 @@ Security Gate:
 ## Sprint 4.1 — Field-Level Encryption
 
 ### VV-4.1.1 Encrypt Evidence Blobs
-- [ ] Envelope encryption
-- [ ] Per-tenant keys
+- [x] Envelope encryption
+- [x] Per-tenant keys
 - Commit:
   - `feat(crypto): implement envelope encryption for evidence`
 
 ### VV-4.1.2 HSM Integration
-- [ ] Store root keys in HSM
+- [x] Store root keys in HSM
 - Commit:
   - `feat(crypto): integrate HSM key management`
 
