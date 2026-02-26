@@ -1635,3 +1635,5 @@ Instead of asking organizations to prove they are secure during audits, the plat
 ---
 
 **VectorVue Roadmap** | Last Updated: February 19, 2026 | Maintained by: Internal Engineering Team
+
+Security Expansion Appendix: [VectorVue Security Expansion Appendix](./Expansion_Appendix.md)

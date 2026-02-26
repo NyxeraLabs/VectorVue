@@ -22,6 +22,35 @@
 # ✘ Sell derived competing products
 
 services:
+  vectorvue_telemetry_gateway:
+    image: vectorvue:phase6
+    container_name: "${COMPOSE_PROJECT_NAME:-vectorvue}_telemetry_gateway"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      VV_TG_REQUIRE_MTLS: "1"
+      VV_TG_REQUIRE_PAYLOAD_SIGNATURE: "1"
+      VV_TG_ALLOWED_CLOCK_SKEW_SECONDS: "30"
+      VV_TG_NONCE_TTL_SECONDS: "120"
+      VV_TG_SPECTRASTRIKE_CERT_SHA256: "${VV_TG_SPECTRASTRIKE_CERT_SHA256:?required}"
+      VV_TG_SPECTRASTRIKE_ED25519_PUBKEY: "${VV_TG_SPECTRASTRIKE_ED25519_PUBKEY:?required}"
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+      - /run:size=16m,nosuid,nodev
+    networks:
+      - telemetry_private
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3).read()\" || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: ["python", "-m", "uvicorn", "services.telemetry_gateway.main:app", "--host", "0.0.0.0", "--port", "8090"]
+
   vectorvue_app:
     build:
       context: .
@@ -344,3 +373,7 @@ volumes:
   vectorvue_tmp:
   vectorvue_config:
   vectorvue_analytics:
+
+networks:
+  telemetry_private:
+    internal: true

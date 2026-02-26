@@ -11,35 +11,35 @@ Status: Expansion Post-SpectraStrike Integration
 ## Sprint 0.1 — Telemetry Capability Removal from Client API
 
 ### VV-0.1.1 Identify Insecure Telemetry Endpoints
-- [ ] Audit all API routes under `/api/telemetry`
-- [ ] Trace middleware handling ingestion logic
-- [ ] Identify shared secrets between SpectraStrike and VectorVue
+- [x] Audit all API routes under `/api/telemetry`
+- [x] Trace middleware handling ingestion logic
+- [x] Identify shared secrets between SpectraStrike and VectorVue
 - Commit:
   - `audit(api): locate telemetry ingestion endpoints`
 
 ### VV-0.1.2 Remove Telemetry Routes
-- [ ] Delete ingestion controllers
-- [ ] Remove payload validators
-- [ ] Remove telemetry DTO models
+- [x] Delete ingestion controllers
+- [x] Remove payload validators
+- [x] Remove telemetry DTO models
 - Commit:
   - `refactor(api): remove telemetry ingestion routes`
 
 ### VV-0.1.3 Remove Shared Authentication Paths
-- [ ] Remove operator tokens from auth service
-- [ ] Invalidate active API keys
-- [ ] Rotate secrets in secret manager
+- [x] Remove operator tokens from auth service
+- [x] Invalidate active API keys
+- [x] Rotate secrets in secret manager
 - Commit:
   - `security(auth): revoke shared operator credentials`
 
 ### VV-0.1.4 Database Cleanup
-- [ ] Remove ingestion staging tables
-- [ ] Remove foreign keys tied to ingestion pipeline
+- [x] Remove ingestion staging tables
+- [x] Remove foreign keys tied to ingestion pipeline
 - Commit:
   - `db(cleanup): drop telemetry staging tables`
 
 ### VV-0.1.5 Security Validation
-- [ ] Confirm no public endpoint accepts POST telemetry
-- [ ] Run attack surface scan
+- [x] Confirm no public endpoint accepts POST telemetry
+- [x] Run attack surface scan
 - Gate:
   - Security review required
 
@@ -50,21 +50,21 @@ Status: Expansion Post-SpectraStrike Integration
 ## Sprint 1.1 — Service Bootstrapping
 
 ### VV-1.1.1 Create New Microservice Repo
-- Name: `vectorvue-telemetry-gateway`
-- Private network only
+- [x] Name: `vectorvue-telemetry-gateway`
+- [x] Private network only
 - Commit:
   - `chore(init): bootstrap telemetry gateway service`
 
 ### VV-1.1.2 Implement mTLS Enforcement
-- [ ] Generate internal CA
-- [ ] Enforce client cert validation
-- [ ] Reject unsigned clients
+- [x] Generate internal CA
+- [x] Enforce client cert validation
+- [x] Reject unsigned clients
 - Commit:
   - `feat(security): enforce mTLS client authentication`
 
 ### VV-1.1.3 Certificate Pinning
-- [ ] Store SpectraStrike public cert fingerprint
-- [ ] Validate handshake fingerprint
+- [x] Store SpectraStrike public cert fingerprint
+- [x] Validate handshake fingerprint
 - Commit:
   - `feat(security): add certificate pinning`
 
