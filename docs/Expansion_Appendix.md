@@ -241,14 +241,17 @@ Security Gate:
 ## Sprint 8.1 — Security Gates in Pipeline
 
 ### VV-8.1.1 Static Code Analysis
+- [x] Add dedicated security workflow stage for static analysis
 - Commit:
   - `ci(security): add SAST pipeline stage`
 
 ### VV-8.1.2 Dependency Scanning
+- [x] Add dependency vulnerability scanner to security workflow
 - Commit:
   - `ci(security): add dependency vulnerability scanning`
 
 ### VV-8.1.3 Security Regression Tests
+- [x] Enforce policy gate and regression test suite in CI
 - Commit:
   - `ci(security): enforce security regression suite`
 
