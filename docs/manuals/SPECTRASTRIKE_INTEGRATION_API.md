@@ -1,88 +1,45 @@
-# SpectraStrike Integration API
+<!--
+Copyright (c) 2026 NyxeraLabs
+Author: José María Micoli
+Licensed under BSL 1.1
+Change Date: 2033-02-17 → Apache-2.0
 
-> Status: Retired in Phase 0 Sprint 0.1. Public client API ingestion endpoints were removed.
+You may:
+✔ Study
+✔ Modify
+✔ Use for internal security testing
 
-## Base Path
-No active runtime routes. Historical base path was:
+You may NOT:
+✘ Offer as a commercial service
+✘ Sell derived competing products
+-->
 
-- `/api/v1/integrations/spectrastrike/*` (removed)
+# SpectraStrike Integration API (Legacy Status)
 
-## Authentication and Tenant Requirements
-- Bearer JWT is required in `Authorization: Bearer <token>`.
-- JWT must include `tenant_id` claim.
-- All writes and status reads are isolated by the authenticated tenant.
-- Cross-tenant access to ingest status returns `404 Request not found`.
+> Status: Retired from public client API in Phase 0 Sprint 0.1.
 
-## HTTPS and Signature Requirements
-- If `VV_REQUIRE_HTTPS=1`, non-HTTPS requests are rejected.
-- Optional request signature verification is enabled when `VV_SPECTRASTRIKE_SIGNATURE_SECRET` is configured.
-- Signature headers:
-  - `X-Signature`
-  - `X-Timestamp`
+Public endpoints under `/api/v1/integrations/spectrastrike/*` are no longer part of the client API surface and must not be reintroduced.
 
-## Idempotency
-- `POST /events` supports `Idempotency-Key`.
-- Replaying the same key with the same payload returns the original envelope and `X-Idempotent-Replay: true`.
-- Reusing the same key with a different payload returns `409 idempotency_conflict`.
+## Current Supported Integration Path
 
-## Endpoints
+SpectraStrike integration is now supported only through the hardened internal telemetry gateway and federation verification model documented here:
 
-### `POST /api/v1/integrations/spectrastrike/events`
-Ingest one telemetry event.
+- [Secure SpectraStrike ↔ VectorVue Integration Manual](../integration/spectrastrike-vectorvue.md)
+- [Security Expansion Appendix](../Expansion_Appendix.md)
+- [Product Roadmap](../ROADMAP.md)
 
-### `POST /api/v1/integrations/spectrastrike/events/batch`
-Ingest telemetry events in batch.
-- Enforces `VV_SPECTRASTRIKE_MAX_BATCH_SIZE`.
-- Returns per-item partial failure details.
+## Security Requirements (Current)
 
-### `POST /api/v1/integrations/spectrastrike/findings`
-Ingest one finding.
-- Severity values are normalized (`informational` -> `info`, `med` -> `medium`, etc).
-- Emits tenant-scoped audit event on acceptance.
+- Zero-trust service-to-service communication.
+- Mandatory mTLS certificate identity validation.
+- Mandatory Ed25519 payload signatures.
+- Replay protection (timestamp window + nonce enforcement).
+- Tenant mapping enforcement through signed metadata.
+- Tamper-evident logging of accept/reject outcomes.
 
-### `POST /api/v1/integrations/spectrastrike/findings/batch`
-Ingest findings in batch with partial failure semantics.
+## Prohibited Patterns
 
-### `GET /api/v1/integrations/spectrastrike/ingest/status/{request_id}`
-Fetch processing status and failure references for one ingest request.
-
-## Response Envelope
-All SpectraStrike endpoints return:
-- `request_id`
-- `status` (`accepted|partial|failed|replayed`)
-- `data`
-- `errors[]`
-- optional `signature`
-
-## Error Model
-Common error codes:
-- `validation_failed`
-- `batch_too_large`
-- `idempotency_conflict`
-- HTTP auth errors from tenant JWT guard (`401`).
-
-Validation errors return a structured envelope with `status=failed` and `errors[]` populated.
-
-## Rate Limits
-- Router reuses existing client API rate limiter (`client_rate_limit`).
-- Event/finding batches also emit batch-size metric hooks.
-
-## Audit and Observability
-Audit entries are emitted for:
-- auth failures
-- schema rejection
-- accepted ingestion
-- batch partial failures
-
-Structured logs include:
-- `request_id`
-- `tenant_id`
-- `endpoint`
-- `outcome`
-
-Metric hooks emitted:
-- `ingest_total`
-- `ingest_failed`
-- `auth_failed`
-- `validation_failed`
-- `batch_size`
+- Shared secrets between SpectraStrike and VectorVue services.
+- Unsigned telemetry ingestion.
+- Public client API write endpoints for telemetry ingestion.
+- mTLS bypass or optional certificate identity checks.

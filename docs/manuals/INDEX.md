@@ -41,6 +41,9 @@ Use documents by operational role and task. Internal phase names are intentional
 2. [Client Analytics Manual](./PHASE8_CLIENT_ANALYTICS_MANUAL.md)
 3. [Compliance API Specification](../COMPLIANCE_API_SPEC.md)
 4. [PostgreSQL Usage Guide](./POSTGRES_USAGE_GUIDE.md)
+5. [Secure SpectraStrike ↔ VectorVue Integration](../integration/spectrastrike-vectorvue.md)
+6. [SpectraStrike Integration API (Legacy Status)](./SPECTRASTRIKE_INTEGRATION_API.md)
+7. [SpectraStrike Payload Examples](./SPECTRASTRIKE_PAYLOAD_EXAMPLES.md)
 
 ### 4. Auditor / Governance / Risk
 
@@ -55,6 +58,7 @@ Use documents by operational role and task. Internal phase names are intentional
 2. [PostgreSQL Migration Guide](./POSTGRES_MIGRATION_GUIDE.md)
 3. [PostgreSQL Regression Checklist](./POSTGRES_REGRESSION_CHECKLIST.md)
 4. [Documentation Policy](./DOCUMENTATION_POLICY.md)
+5. [Security Expansion Appendix](../Expansion_Appendix.md)
 
 ## Common Operational Tasks
 
@@ -69,6 +73,8 @@ Use documents by operational role and task. Internal phase names are intentional
 ## Product Planning Reference
 
 - [Roadmap](../ROADMAP.md)
+- [Security Expansion Appendix](../Expansion_Appendix.md)
+- [Secure SpectraStrike ↔ VectorVue Integration](../integration/spectrastrike-vectorvue.md)
 
 ## Legal & Compliance Enforcement
 

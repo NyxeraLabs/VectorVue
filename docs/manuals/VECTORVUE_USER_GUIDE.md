@@ -59,6 +59,7 @@ This guide explains how VectorVue is used as a commercial security validation an
 - Queue/workers: Redis + RQ workers
 - Portal: Next.js
 - Reverse proxy: nginx
+- Internal telemetry gateway: mTLS + Ed25519 verification + replay defense
 
 Core design rules:
 
@@ -66,6 +67,7 @@ Core design rules:
 - append-only evidence records where required
 - reproducible analytics outputs with version lineage
 - no silent model promotion
+- zero-trust federation (no shared secrets, explicit trust material only)
 
 ## 4. Security and Privacy Baseline
 
@@ -74,6 +76,9 @@ Core design rules:
 - immutable compliance event chain
 - telemetry limited to security workflow behavior
 - no marketing-style tracking data capture
+- read-only client API (telemetry ingestion removed from public client API)
+- mandatory mTLS and signed telemetry for SpectraStrike federation path
+- tamper-evident audit logging and red-team validation gates in CI
 
 ## 5. Commercial Service Quality Checklist
 
@@ -127,3 +132,6 @@ make run-tui
 - Client usage: [Client Portal Manual](./CLIENT_PORTAL_MANUAL.md)
 - API integrations: [Client API Manual](./CLIENT_API_MANUAL.md)
 - Compliance and audit: [Compliance API Spec](../COMPLIANCE_API_SPEC.md), [Auditor Guide](../AUDITOR_GUIDE.md)
+- Platform roadmap: [Product Roadmap](../ROADMAP.md)
+- Hardening details: [Security Expansion Appendix](../Expansion_Appendix.md)
+- Federation operations: [Secure SpectraStrike ↔ VectorVue Integration](../integration/spectrastrike-vectorvue.md)

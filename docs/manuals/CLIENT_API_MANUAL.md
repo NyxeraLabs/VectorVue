@@ -121,3 +121,5 @@ make api-smoke
 - [Compliance API Spec](../COMPLIANCE_API_SPEC.md)
 - [Auditor Guide](../AUDITOR_GUIDE.md)
 - [Phase 0 Sprint 0.1 Roadmap](../roadmap/phase-0-sprint-0.1.md)
+- [Security Expansion Appendix](../Expansion_Appendix.md)
+- [Secure SpectraStrike ↔ VectorVue Integration](../integration/spectrastrike-vectorvue.md)

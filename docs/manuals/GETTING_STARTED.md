@@ -18,6 +18,11 @@ You may NOT:
 
 This guide brings a new environment from zero to a working commercial demo.
 
+Security baseline for this deployment:
+- Client API telemetry ingestion is retired.
+- SpectraStrike federation uses internal telemetry gateway only.
+- mTLS + Ed25519 signed telemetry are mandatory.
+
 ## Objective
 
 By the end of this guide you will have:
@@ -197,3 +202,9 @@ docker compose logs --tail=100 vectorvue_postgres
 ```
 
 For deeper troubleshooting use [Troubleshooting Guide](./TROUBLESHOOTING_GUIDE.md).
+
+## Security References
+
+- [Product Roadmap](../ROADMAP.md)
+- [Security Expansion Appendix](../Expansion_Appendix.md)
+- [Secure SpectraStrike ↔ VectorVue Integration](../integration/spectrastrike-vectorvue.md)
