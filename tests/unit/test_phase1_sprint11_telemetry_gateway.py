@@ -39,6 +39,9 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         os.environ["VV_TG_REQUIRE_PAYLOAD_SIGNATURE"] = "1"
         os.environ["VV_TG_ALLOWED_CLOCK_SKEW_SECONDS"] = "30"
         os.environ["VV_TG_NONCE_TTL_SECONDS"] = "120"
+        os.environ["VV_TG_NONCE_BACKEND"] = "memory"
+        os.environ["VV_TG_RATE_LIMIT_BACKEND"] = "memory"
+        os.environ["VV_TG_RATE_LIMIT_PER_MINUTE"] = "2"
 
         _clear_replay_cache_for_tests()
         self.client = TestClient(app)
@@ -113,6 +116,40 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
 
         second = self.client.post("/internal/v1/telemetry", headers=headers, json=payload)
         self.assertEqual(second.status_code, 409)
+
+    def test_rejects_expired_timestamp(self):
+        expired_ts = int(time.time()) - 360
+        payload = self._payload("nonce-006", ts=expired_ts)
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 401)
+
+    def test_rejects_forged_signature(self):
+        forged_key = Ed25519PrivateKey.generate()
+        payload = self._payload("nonce-007")
+        raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        msg = f"{payload['timestamp']}.{payload['nonce']}.".encode("utf-8") + raw
+        bad_sig = forged_key.sign(msg)
+        headers = {
+            "X-Client-Cert-Sha256": "a" * 64,
+            "X-Telemetry-Timestamp": str(payload["timestamp"]),
+            "X-Telemetry-Nonce": payload["nonce"],
+            "X-Telemetry-Signature": base64.b64encode(bad_sig).decode("utf-8"),
+            "Content-Type": "application/json",
+        }
+        res = self.client.post("/internal/v1/telemetry", headers=headers, json=payload)
+        self.assertEqual(res.status_code, 401)
+
+    def test_rate_limit_blocks_operator_burst(self):
+        first = self._payload("nonce-008")
+        second = self._payload("nonce-009")
+        third = self._payload("nonce-010")
+
+        r1 = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(first), json=first)
+        self.assertEqual(r1.status_code, 202)
+        r2 = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(second), json=second)
+        self.assertEqual(r2.status_code, 202)
+        r3 = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(third), json=third)
+        self.assertEqual(r3.status_code, 429)
 
 
 if __name__ == "__main__":

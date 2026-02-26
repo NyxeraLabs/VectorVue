@@ -73,20 +73,20 @@ Status: Expansion Post-SpectraStrike Integration
 ## Sprint 1.2 — Payload Security Layer
 
 ### VV-1.2.1 Ed25519 Signature Verification
-- [ ] Validate payload signature
-- [ ] Reject unsigned payloads
+- [x] Validate payload signature
+- [x] Reject unsigned payloads
 - Commit:
   - `feat(validation): implement payload signature verification`
 
 ### VV-1.2.2 Replay Protection
-- [ ] Add nonce store (Redis)
-- [ ] Enforce timestamp window (±30s)
+- [x] Add nonce store (Redis)
+- [x] Enforce timestamp window (±30s)
 - Commit:
   - `feat(security): add replay attack protection`
 
 ### VV-1.2.3 Rate Limiting
-- [ ] Limit per Operator ID
-- [ ] Detect burst anomalies
+- [x] Limit per Operator ID
+- [x] Detect burst anomalies
 - Commit:
   - `feat(rate-limit): enforce operator rate limiting`
 

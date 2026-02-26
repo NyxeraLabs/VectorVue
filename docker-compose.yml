@@ -31,11 +31,18 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    depends_on:
+      redis:
+        condition: service_healthy
     environment:
       VV_TG_REQUIRE_MTLS: "1"
       VV_TG_REQUIRE_PAYLOAD_SIGNATURE: "1"
       VV_TG_ALLOWED_CLOCK_SKEW_SECONDS: "30"
       VV_TG_NONCE_TTL_SECONDS: "120"
+      VV_TG_NONCE_BACKEND: "redis"
+      VV_TG_RATE_LIMIT_BACKEND: "redis"
+      VV_TG_RATE_LIMIT_PER_MINUTE: "120"
+      VV_TG_REDIS_URL: redis://:strongpassword@redis:6379/0
       VV_TG_SPECTRASTRIKE_CERT_SHA256: "${VV_TG_SPECTRASTRIKE_CERT_SHA256:?required}"
       VV_TG_SPECTRASTRIKE_ED25519_PUBKEY: "${VV_TG_SPECTRASTRIKE_ED25519_PUBKEY:?required}"
     tmpfs:

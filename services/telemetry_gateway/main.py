@@ -31,6 +31,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from redis import Redis
+from redis.exceptions import RedisError
 
 
 HEX_64_RE = re.compile(r"^[a-fA-F0-9]{64}$")
@@ -59,6 +61,10 @@ class GatewaySettings:
     spectrastrike_ed25519_public_key_b64: str
     allowed_clock_skew_seconds: int
     nonce_ttl_seconds: int
+    nonce_backend: str
+    redis_url: str
+    rate_limit_per_minute: int
+    rate_limit_backend: str
 
 
 class ReplayGuard:
@@ -83,6 +89,39 @@ class ReplayGuard:
 _replay_guard = ReplayGuard()
 
 
+class MemoryRateLimiter:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._buckets: dict[str, tuple[int, float]] = {}
+
+    def hit(self, key: str, limit: int, ttl_seconds: int) -> bool:
+        now = time.time()
+        with self._lock:
+            self._buckets = {k: v for k, v in self._buckets.items() if v[1] > now}
+            count, exp = self._buckets.get(key, (0, now + float(ttl_seconds)))
+            count += 1
+            self._buckets[key] = (count, exp)
+            return count <= limit
+
+    def clear(self) -> None:
+        with self._lock:
+            self._buckets.clear()
+
+
+_rate_limiter = MemoryRateLimiter()
+
+
+def _get_redis_client(settings: GatewaySettings) -> Redis:
+    if not settings.redis_url:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Telemetry gateway Redis URL is not configured")
+    try:
+        client = Redis.from_url(settings.redis_url, decode_responses=True)
+        client.ping()
+        return client
+    except RedisError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Telemetry gateway Redis backend unavailable") from exc
+
+
 def _parse_bool(name: str, default: str = "1") -> bool:
     return os.environ.get(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
@@ -99,11 +138,12 @@ def _load_settings() -> GatewaySettings:
     try:
         skew = int(os.environ.get("VV_TG_ALLOWED_CLOCK_SKEW_SECONDS", "30").strip())
         nonce_ttl = int(os.environ.get("VV_TG_NONCE_TTL_SECONDS", "120").strip())
+        rate_limit_per_min = int(os.environ.get("VV_TG_RATE_LIMIT_PER_MINUTE", "120").strip())
     except ValueError as exc:
-        raise RuntimeError("Clock skew and nonce TTL must be integers") from exc
+        raise RuntimeError("Clock skew, nonce TTL and rate limit must be integers") from exc
 
-    if skew < 1 or nonce_ttl < 30:
-        raise RuntimeError("Clock skew must be >=1 and nonce TTL must be >=30")
+    if skew < 1 or nonce_ttl < 30 or rate_limit_per_min < 1:
+        raise RuntimeError("Clock skew must be >=1, nonce TTL >=30, and rate limit >=1")
 
     return GatewaySettings(
         require_mtls=_parse_bool("VV_TG_REQUIRE_MTLS", "1"),
@@ -112,6 +152,10 @@ def _load_settings() -> GatewaySettings:
         spectrastrike_ed25519_public_key_b64=pubkey,
         allowed_clock_skew_seconds=skew,
         nonce_ttl_seconds=nonce_ttl,
+        nonce_backend=os.environ.get("VV_TG_NONCE_BACKEND", "redis").strip().lower(),
+        redis_url=os.environ.get("VV_TG_REDIS_URL", "").strip(),
+        rate_limit_per_minute=rate_limit_per_min,
+        rate_limit_backend=os.environ.get("VV_TG_RATE_LIMIT_BACKEND", "redis").strip().lower(),
     )
 
 
@@ -157,10 +201,6 @@ def _verify_signature(request: Request, settings: GatewaySettings, raw_body: byt
     if abs(int(time.time()) - ts) > settings.allowed_clock_skew_seconds:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Telemetry timestamp out of allowed clock skew")
 
-    nonce_key = hashlib.sha256(f"{ts}:{nonce}".encode("utf-8")).hexdigest()
-    if not _replay_guard.register(nonce_key, settings.nonce_ttl_seconds):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Replay detected: nonce already used")
-
     try:
         signature = base64.b64decode(signature_b64)
     except Exception as exc:
@@ -173,10 +213,51 @@ def _verify_signature(request: Request, settings: GatewaySettings, raw_body: byt
     except InvalidSignature as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid telemetry signature") from exc
 
+    nonce_key = hashlib.sha256(f"{ts}:{nonce}".encode("utf-8")).hexdigest()
+    if not _register_nonce_once(nonce_key, settings):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Replay detected: nonce already used")
+
     return ts, nonce
 
 
-app = FastAPI(title="VectorVue Telemetry Gateway", version="1.1.0")
+def _register_nonce_once(nonce_key: str, settings: GatewaySettings) -> bool:
+    if settings.nonce_backend == "memory":
+        return _replay_guard.register(nonce_key, settings.nonce_ttl_seconds)
+    if settings.nonce_backend == "redis":
+        client = _get_redis_client(settings)
+        try:
+            return bool(client.set(name=f"vv:tg:nonce:{nonce_key}", value="1", nx=True, ex=settings.nonce_ttl_seconds))
+        except RedisError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Nonce store unavailable") from exc
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Unsupported nonce backend")
+
+
+def _enforce_operator_rate_limit(operator_id: str, settings: GatewaySettings) -> None:
+    if settings.rate_limit_backend == "memory":
+        window_key = f"{operator_id}:{int(time.time() // 60)}"
+        accepted = _rate_limiter.hit(window_key, settings.rate_limit_per_minute, 90)
+        if not accepted:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Operator burst anomaly detected")
+        return
+
+    if settings.rate_limit_backend == "redis":
+        client = _get_redis_client(settings)
+        try:
+            bucket = int(time.time() // 60)
+            key = f"vv:tg:ratelimit:{operator_id}:{bucket}"
+            count = int(client.incr(key))
+            if count == 1:
+                client.expire(key, 90)
+            if count > settings.rate_limit_per_minute:
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Operator burst anomaly detected")
+            return
+        except RedisError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Rate limiter unavailable") from exc
+
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Unsupported rate-limit backend")
+
+
+app = FastAPI(title="VectorVue Telemetry Gateway", version="1.2.0")
 
 
 @app.get("/healthz")
@@ -191,6 +272,8 @@ def healthz() -> dict[str, Any]:
         "require_mtls": settings.require_mtls,
         "require_payload_signature": settings.require_payload_signature,
         "nonce_ttl_seconds": settings.nonce_ttl_seconds,
+        "nonce_backend": settings.nonce_backend,
+        "rate_limit_per_minute": settings.rate_limit_per_minute,
     }
 
 
@@ -223,6 +306,7 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Body timestamp mismatch with signed header")
     if parsed.nonce != nonce:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Body nonce mismatch with signed header")
+    _enforce_operator_rate_limit(parsed.operator_id, settings)
 
     return TelemetryIngestResponse(accepted=True, request_id=str(uuid4()))
 
@@ -231,3 +315,4 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
 
 def _clear_replay_cache_for_tests() -> None:
     _replay_guard.clear()
+    _rate_limiter.clear()
