@@ -70,6 +70,21 @@ VectorVue is designed for:
 - Continuous compliance scoring and signed evidence export packages  
 - Immutable evidence chains for audit and regulatory verification  
 
+## Security Expansion Status (Phase 0-9 + Appendix)
+
+Security hardening roadmap and expansion appendix are fully implemented.
+
+- Public client API telemetry ingestion removed; client API remains read-only for tenant portal use.
+- SpectraStrike ingestion moved to internal telemetry gateway only.
+- Mandatory mTLS service identity validation with certificate pinning.
+- Mandatory Ed25519 payload signature verification.
+- Replay protection (nonce + timestamp skew checks).
+- Tenant mapping enforcement through signed metadata + operator mapping.
+- Internal queue isolation with dead-letter handling and integrity hashes.
+- Evidence envelope encryption with tenant-scoped cryptographic context.
+- Tamper-evident append-only logging with hash-chain verification and sealing.
+- Federation proof-of-origin verification and red-team simulation CI gates.
+
 ---
 
 ## Quick Start (Commercial Demo)
@@ -117,6 +132,10 @@ Expected outcomes:
 - legal acceptance manifest validates successfully
 - unit test suite passes in app runtime
 - portal build succeeds in builder image profile (`vectorvue_portal_builder`)
+<<<<<<< HEAD
+=======
+
+>>>>>>> QA-backup
 **Seed realistic demo data:**
 
 ```bash
@@ -169,7 +188,7 @@ make api-smoke
 
 ## Documentation
 
-Start here: [Documentation Index](#)
+Start here: [Documentation Index](./docs/manuals/INDEX.md)
 
 Recommended paths by role:
 
@@ -178,6 +197,12 @@ Recommended paths by role:
 * **Integration Teams:** Client API Manual
 * **Auditors and Compliance Teams:** Compliance API Spec, Auditor Guide
 * **Platform Engineering:** Deployment, PostgreSQL Usage Guide
+
+Security architecture and integration references:
+
+* [Product Roadmap (Phase 0-9)](./docs/ROADMAP.md)
+* [Security Expansion Appendix](./docs/Expansion_Appendix.md)
+* [Secure SpectraStrike ↔ VectorVue Integration Manual](./docs/integration/spectrastrike-vectorvue.md)
 
 ---
 

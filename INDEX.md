@@ -5,6 +5,8 @@
 - [README](./README.md)
 - [Documentation Index](./docs/manuals/INDEX.md)
 - [Roadmap](./docs/ROADMAP.md)
+- [Security Expansion Appendix](./docs/Expansion_Appendix.md)
+- [SpectraStrike ↔ VectorVue Integration Manual](./docs/integration/spectrastrike-vectorvue.md)
 
 ## Legal & Compliance Enforcement
 

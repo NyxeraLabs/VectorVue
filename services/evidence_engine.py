@@ -28,6 +28,7 @@ from typing import Any
 from sqlalchemy import text
 
 from analytics.db import session_scope
+from security.evidence_crypto import decrypt_evidence_blob, encrypt_evidence_blob, is_encrypted_evidence_blob
 
 
 def _signing_key() -> str:
@@ -56,6 +57,7 @@ def append_compliance_event(
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     payload_json = _canonical_json(payload)
+    encrypted_payload = _encrypt_payload_blob(tenant_id=tenant_id, payload_json=payload_json)
     dataset_hash = _sha256(payload_json)
 
     with session_scope() as db:
@@ -95,7 +97,7 @@ def append_compliance_event(
                 "timestamp_signature": timestamp_signature,
                 "previous_event_hash": previous_event_hash or None,
                 "chain_hash": chain_hash,
-                "payload_json": payload_json,
+                "payload_json": json.dumps(encrypted_payload, sort_keys=True),
                 "retention_until": now + timedelta(days=max(30, retention_days)),
                 "created_at": now,
             },
@@ -166,6 +168,8 @@ def build_audit_package(tenant_id: str, framework: str, start_ts: datetime, end_
                 {"tenant_id": tenant_id, "framework": framework, "start_ts": start_ts, "end_ts": end_ts},
             ).mappings().all()
         ]
+        for event in events:
+            event["payload_json"] = _decrypt_payload_for_export(tenant_id=tenant_id, payload_value=event.get("payload_json"))
         latest_score = db.execute(
             text(
                 """SELECT framework, score, coverage_percent, calculated_at, details_json
@@ -231,3 +235,19 @@ def build_audit_package(tenant_id: str, framework: str, start_ts: datetime, end_
         "events_count": len(events),
         "controls_count": len(controls),
     }
+
+
+def _encrypt_payload_blob(tenant_id: str, payload_json: str) -> dict[str, str]:
+    return encrypt_evidence_blob(tenant_id=tenant_id, plaintext=payload_json.encode("utf-8"))
+
+
+def _decrypt_payload_for_export(tenant_id: str, payload_value: Any) -> Any:
+    if isinstance(payload_value, str):
+        try:
+            payload_value = json.loads(payload_value)
+        except json.JSONDecodeError:
+            return payload_value
+    if isinstance(payload_value, dict) and is_encrypted_evidence_blob(payload_value):
+        raw = decrypt_evidence_blob(tenant_id=tenant_id, envelope=payload_value)
+        return json.loads(raw.decode("utf-8"))
+    return payload_value
