@@ -34,6 +34,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from redis import Redis
 from redis.exceptions import RedisError
+from services.federation.schemas import SignedEvidenceBundle
+from services.federation.verifier import federation_bundle_hash, verify_proof_of_origin
 from security.tamper_log import get_tamper_audit_log
 from services.telemetry_gateway.queue import SecureQueuePublisher, clear_memory_messages, load_queue_settings
 from services.telemetry_processing.validator import validate_canonical_payload
@@ -67,6 +69,17 @@ class SignedTenantMetadata(BaseModel):
 class TelemetryIngestResponse(BaseModel):
     accepted: bool
     request_id: str
+
+
+class FederationVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bundle: SignedEvidenceBundle
+
+
+class FederationVerifyResponse(BaseModel):
+    accepted: bool
+    bundle_hash: str
 
 
 @dataclass(frozen=True)
@@ -366,6 +379,41 @@ def healthz() -> dict[str, Any]:
         "rate_limit_per_minute": settings.rate_limit_per_minute,
         "queue_backend": settings.queue_backend,
     }
+
+
+@app.post("/internal/v1/federation/verify", response_model=FederationVerifyResponse, status_code=status.HTTP_200_OK)
+async def verify_federation_bundle(request: Request, payload: FederationVerifyRequest) -> FederationVerifyResponse:
+    audit_log = get_tamper_audit_log()
+    request_id = str(uuid4())
+    try:
+        settings = _load_settings()
+    except RuntimeError as exc:
+        audit_log.append_event(
+            event_type="federation.rejected",
+            actor="telemetry_gateway",
+            details={"request_id": request_id, "reason": "gateway_settings_invalid", "detail": str(exc)},
+        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    try:
+        _enforce_service_identity_auth(request, settings)
+        if not verify_proof_of_origin(payload.bundle):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Federation proof-of-origin verification failed")
+
+        bundle_hash = federation_bundle_hash(payload.bundle)
+        audit_log.append_event(
+            event_type="federation.accepted",
+            actor="telemetry_gateway",
+            details={"request_id": request_id, "bundle_hash": bundle_hash, "operator_id": payload.bundle.operator_id},
+        )
+        return FederationVerifyResponse(accepted=True, bundle_hash=bundle_hash)
+    except HTTPException as exc:
+        audit_log.append_event(
+            event_type="federation.rejected",
+            actor="telemetry_gateway",
+            details={"request_id": request_id, "status_code": exc.status_code, "detail": str(exc.detail)},
+        )
+        raise
 
 
 @app.post("/internal/v1/telemetry", response_model=TelemetryIngestResponse, status_code=status.HTTP_202_ACCEPTED)

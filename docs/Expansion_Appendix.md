@@ -219,17 +219,18 @@ Security Gate:
 ## Sprint 7.1 — Federation Spec Definition
 
 ### VV-7.1.1 Define Signed Evidence Bundle Format
-- Fields:
-  - operator_id
-  - campaign_id
-  - execution_hash
-  - timestamp
-  - nonce
-  - signature
+- [x] Fields:
+  - [x] operator_id
+  - [x] campaign_id
+  - [x] execution_hash
+  - [x] timestamp
+  - [x] nonce
+  - [x] signature
 - Commit:
   - `feat(federation): define signed evidence bundle schema`
 
 ### VV-7.1.2 Proof-of-Origin Verification
+- [x] Proof-of-origin verification implemented
 - Commit:
   - `feat(federation): implement proof-of-origin verification`
 
