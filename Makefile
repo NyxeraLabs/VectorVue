@@ -34,7 +34,7 @@ TENANT_NAME ?= Default Customer
 TENANT_ID ?= auto
 HTTP_HOST_PORT ?= 80
 HTTPS_HOST_PORT ?= 443
-POSTGRES_HOST_PORT ?= 5433
+POSTGRES_HOST_PORT ?= 55433
 PORTAL_DIR ?= portal
 export HTTP_HOST_PORT HTTPS_HOST_PORT POSTGRES_HOST_PORT
 GLOBAL_ADMIN_USER ?= redteam_admin
@@ -145,7 +145,7 @@ help:
 	@echo "  CUSTOMER=acme TENANT_NAME='ACME Corp' TENANT_ID=auto"
 	@echo "  PANEL1_TENANT_NAME='ACME Industries' PANEL2_TENANT_NAME='Globex Corporation'"
 	@echo "  PANEL1_PORTAL_HOST=acme.vectorvue.local PANEL2_PORTAL_HOST=globex.vectorvue.local"
-	@echo "  HTTP_HOST_PORT=8080 HTTPS_HOST_PORT=8443 POSTGRES_HOST_PORT=5543"
+	@echo "  HTTP_HOST_PORT=8080 HTTPS_HOST_PORT=8443 POSTGRES_HOST_PORT=55433"
 
 wizard:
 	@set -eu; \
@@ -291,7 +291,7 @@ run-tui: bootstrap-local-integration phase6-up
 
 run-local-postgres:
 	VV_DB_BACKEND=postgres \
-	VV_DB_URL=postgresql://vectorvue:strongpassword@127.0.0.1:5433/vectorvue_db \
+	VV_DB_URL=postgresql://vectorvue:strongpassword@127.0.0.1:55433/vectorvue_db \
 	python3 vv.py
 
 phase6-up:
