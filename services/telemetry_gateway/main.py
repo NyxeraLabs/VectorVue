@@ -46,10 +46,20 @@ class TelemetryIngestRequest(BaseModel):
 
     operator_id: str = Field(min_length=1, max_length=128)
     campaign_id: str = Field(min_length=1, max_length=128)
+    tenant_id: str = Field(pattern=r"^[a-fA-F0-9-]{36}$")
     execution_hash: str = Field(min_length=64, max_length=64)
     timestamp: int
     nonce: str = Field(min_length=12, max_length=128)
+    signed_metadata: "SignedTenantMetadata"
     payload: dict[str, Any]
+
+
+class SignedTenantMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: str = Field(pattern=r"^[a-fA-F0-9-]{36}$")
+    operator_id: str = Field(min_length=1, max_length=128)
+    campaign_id: str = Field(min_length=1, max_length=128)
 
 
 class TelemetryIngestResponse(BaseModel):
@@ -70,6 +80,7 @@ class GatewaySettings:
     rate_limit_per_minute: int
     rate_limit_backend: str
     queue_backend: str
+    operator_tenant_map: dict[str, str]
 
 
 class ReplayGuard:
@@ -162,7 +173,26 @@ def _load_settings() -> GatewaySettings:
         rate_limit_per_minute=rate_limit_per_min,
         rate_limit_backend=os.environ.get("VV_TG_RATE_LIMIT_BACKEND", "redis").strip().lower(),
         queue_backend=os.environ.get("VV_TG_QUEUE_BACKEND", "nats").strip().lower(),
+        operator_tenant_map=_load_operator_tenant_map(),
     )
+
+
+def _load_operator_tenant_map() -> dict[str, str]:
+    raw = os.environ.get("VV_TG_OPERATOR_TENANT_MAP", "").strip() or "{}"
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("VV_TG_OPERATOR_TENANT_MAP must be valid JSON object") from exc
+    if not isinstance(parsed, dict):
+        raise RuntimeError("VV_TG_OPERATOR_TENANT_MAP must be a JSON object")
+    out: dict[str, str] = {}
+    for k, v in parsed.items():
+        key = str(k).strip()
+        value = str(v).strip()
+        if not key or not re.fullmatch(r"^[a-fA-F0-9-]{36}$", value):
+            raise RuntimeError("VV_TG_OPERATOR_TENANT_MAP values must be UUID strings")
+        out[key] = value
+    return out
 
 
 def _require_header(request: Request, header: str) -> str:
@@ -263,7 +293,23 @@ def _enforce_operator_rate_limit(operator_id: str, settings: GatewaySettings) ->
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Unsupported rate-limit backend")
 
 
-app = FastAPI(title="VectorVue Telemetry Gateway", version="3.1.0")
+def _enforce_signed_tenant_metadata(payload: TelemetryIngestRequest, settings: GatewaySettings) -> None:
+    metadata = payload.signed_metadata
+    if (
+        metadata.tenant_id != payload.tenant_id
+        or metadata.operator_id != payload.operator_id
+        or metadata.campaign_id != payload.campaign_id
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Signed metadata mapping mismatch")
+
+    expected_tenant = settings.operator_tenant_map.get(payload.operator_id)
+    if not expected_tenant:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operator is not mapped to any tenant")
+    if expected_tenant != payload.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operator tenant mapping violation")
+
+
+app = FastAPI(title="VectorVue Telemetry Gateway", version="3.2.0")
 
 
 @app.get("/healthz")
@@ -347,6 +393,7 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
         )
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Canonical telemetry schema validation failed") from exc
 
+    _enforce_signed_tenant_metadata(parsed, settings)
     _enforce_operator_rate_limit(parsed.operator_id, settings)
 
     try:
@@ -355,7 +402,11 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
                 **parsed.model_dump(mode="json"),
                 "payload": canonical_payload.model_dump(mode="json"),
             },
-            trace={"operator_id": parsed.operator_id, "campaign_id": parsed.campaign_id},
+            trace={
+                "operator_id": parsed.operator_id,
+                "campaign_id": parsed.campaign_id,
+                "tenant_id": parsed.tenant_id,
+            },
         )
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Telemetry queue publish failed") from exc

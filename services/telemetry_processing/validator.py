@@ -16,9 +16,31 @@
 
 from __future__ import annotations
 
+import html
+import re
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+SQLI_PATTERNS = [
+    re.compile(r"\bunion\s+select\b", re.IGNORECASE),
+    re.compile(r"\bdrop\s+table\b", re.IGNORECASE),
+    re.compile(r"\bdelete\s+from\b", re.IGNORECASE),
+    re.compile(r"\binsert\s+into\b", re.IGNORECASE),
+    re.compile(r"\bupdate\s+\w+\s+set\b", re.IGNORECASE),
+    re.compile(r"\bor\s+1\s*=\s*1\b", re.IGNORECASE),
+]
+
+
+def _sanitize_text(value: str) -> str:
+    return html.escape(value.strip(), quote=True)
+
+
+def _assert_not_injection(value: str) -> None:
+    for pattern in SQLI_PATTERNS:
+        if pattern.search(value):
+            raise ValueError("Potential injection pattern detected")
 
 
 class CanonicalTelemetryPayload(BaseModel):
@@ -31,6 +53,7 @@ class CanonicalTelemetryPayload(BaseModel):
     observed_at: datetime
     mitre_techniques: list[str] = Field(min_length=1, max_length=32)
     mitre_tactics: list[str] = Field(default_factory=list, max_length=32)
+    description: str | None = Field(default=None, max_length=2048)
     attributes: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
     @field_validator("severity")
@@ -66,6 +89,23 @@ class CanonicalTelemetryPayload(BaseModel):
             if not re.fullmatch(r"TA\d{4}", item.strip().upper()):
                 raise ValueError("mitre_tactics entries must match TA####")
         return [i.strip().upper() for i in value]
+
+    @model_validator(mode="after")
+    def sanitize_and_block_injection(self) -> "CanonicalTelemetryPayload":
+        if self.description:
+            _assert_not_injection(self.description)
+            self.description = _sanitize_text(self.description)
+
+        clean_attributes: dict[str, str | int | float | bool | None] = {}
+        for key, raw_value in self.attributes.items():
+            clean_key = _sanitize_text(str(key))[:80]
+            if isinstance(raw_value, str):
+                _assert_not_injection(raw_value)
+                clean_attributes[clean_key] = _sanitize_text(raw_value)[:1024]
+            else:
+                clean_attributes[clean_key] = raw_value
+        self.attributes = clean_attributes
+        return self
 
 
 def validate_canonical_payload(payload: dict) -> CanonicalTelemetryPayload:

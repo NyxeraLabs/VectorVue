@@ -46,6 +46,7 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         os.environ["VV_TG_QUEUE_BACKEND"] = "memory"
         os.environ["VV_TG_QUEUE_SUBJECT"] = "vectorvue.telemetry.ingest"
         os.environ["VV_TG_DLQ_SUBJECT"] = "vectorvue.telemetry.dlq"
+        os.environ["VV_TG_OPERATOR_TENANT_MAP"] = '{"op-001":"10000000-0000-0000-0000-000000000001"}'
 
         _clear_replay_cache_for_tests()
         self.client = TestClient(app)
@@ -60,9 +61,15 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         return {
             "operator_id": "op-001",
             "campaign_id": "cmp-001",
+            "tenant_id": "10000000-0000-0000-0000-000000000001",
             "execution_hash": "f" * 64,
             "timestamp": now,
             "nonce": nonce,
+            "signed_metadata": {
+                "tenant_id": "10000000-0000-0000-0000-000000000001",
+                "operator_id": "op-001",
+                "campaign_id": "cmp-001",
+            },
             "payload": {
                 "event_id": f"evt-{nonce}",
                 "event_type": "PROCESS_ANOMALY",
@@ -71,6 +78,7 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
                 "observed_at": "2026-02-26T12:00:00Z",
                 "mitre_techniques": ["T1059.001"],
                 "mitre_tactics": ["TA0002"],
+                "description": "Observed suspicious process chain",
                 "attributes": {"asset_ref": "host-nyc-01"},
             },
         }
@@ -196,6 +204,40 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         self.assertEqual(res.status_code, 422)
         dlq = get_memory_messages("vectorvue.telemetry.dlq")
         self.assertEqual(len(dlq), 1)
+
+    def test_sanitizes_html_js_text_fields(self):
+        payload = self._payload("nonce-014")
+        payload["payload"]["description"] = "<script>alert('x')</script>"
+        payload["payload"]["attributes"]["comment"] = "<img src=x onerror=alert(1)>"
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 202)
+        queued = get_memory_messages("vectorvue.telemetry.ingest")
+        self.assertEqual(queued[0]["payload"]["payload"]["description"], "&lt;script&gt;alert(&#x27;x&#x27;)&lt;/script&gt;")
+        self.assertEqual(
+            queued[0]["payload"]["payload"]["attributes"]["comment"],
+            "&lt;img src=x onerror=alert(1)&gt;",
+        )
+
+    def test_blocks_injection_pattern(self):
+        payload = self._payload("nonce-015")
+        payload["payload"]["description"] = "UNION SELECT password FROM users"
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 422)
+        dlq = get_memory_messages("vectorvue.telemetry.dlq")
+        self.assertEqual(len(dlq), 1)
+
+    def test_rejects_signed_metadata_mismatch(self):
+        payload = self._payload("nonce-016")
+        payload["signed_metadata"]["operator_id"] = "op-other"
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 401)
+
+    def test_rejects_operator_tenant_mapping_violation(self):
+        payload = self._payload("nonce-017")
+        payload["tenant_id"] = "20000000-0000-0000-0000-000000000002"
+        payload["signed_metadata"]["tenant_id"] = payload["tenant_id"]
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 403)
 
 
 if __name__ == "__main__":

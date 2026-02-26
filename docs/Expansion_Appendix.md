@@ -139,13 +139,13 @@ Security Gate:
 ## Sprint 3.2 — Sanitization & Isolation
 
 ### VV-3.2.1 Input Sanitization
-- [ ] Escape HTML/JS
-- [ ] Block injection patterns
+- [x] Escape HTML/JS
+- [x] Block injection patterns
 - Commit:
   - `security(input): sanitize telemetry fields`
 
 ### VV-3.2.2 Tenant Mapping Enforcement
-- [ ] Map event to tenant via signed metadata
+- [x] Map event to tenant via signed metadata
 - Commit:
   - `feat(multitenancy): enforce strict tenant mapping`
 
