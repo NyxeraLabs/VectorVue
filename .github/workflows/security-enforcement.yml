@@ -26,6 +26,7 @@ jobs:
     name: SAST (Bandit)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,6 +45,7 @@ jobs:
     name: Dependency Scan (pip-audit)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4

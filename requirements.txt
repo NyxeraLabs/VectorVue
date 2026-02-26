@@ -91,3 +91,4 @@ pyarrow==21.0.0
 scikit-learn==1.7.2
 shap==0.48.0
 joblib==1.5.2
+PyYAML==6.0.2
