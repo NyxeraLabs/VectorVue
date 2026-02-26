@@ -96,3 +96,4 @@ jobs:
           python -m unittest tests/unit/test_phase6_sprint61_tamper_log.py -v
           python -m unittest tests/unit/test_phase7_sprint71_federation.py -v
           python -m unittest tests/unit/test_phase8_sprint81_security_ci_gate.py -v
+          python -m unittest tests/unit/test_phase9_sprint91_redteam_attacks.py -v

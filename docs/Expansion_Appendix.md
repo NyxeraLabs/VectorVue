@@ -268,19 +268,19 @@ Pipeline must fail if:
 
 Simulate:
 
-- Replay attacks
-- Signature forgery
-- MITM attempt
-- Cross-tenant access
-- Log tampering
-- Queue poisoning
-- Rate limit exhaustion
+- [x] Replay attacks
+- [x] Signature forgery
+- [x] MITM attempt
+- [x] Cross-tenant access
+- [x] Log tampering
+- [x] Queue poisoning
+- [x] Rate limit exhaustion
 
 Commit:
-- `test(redteam): add federation attack simulation suite`
+- `test(redteam): add full-system attack simulation suite`
 
 Security Gate:
-- Must pass before production promotion
+- [x] Must pass before production promotion
 
 ---
 
