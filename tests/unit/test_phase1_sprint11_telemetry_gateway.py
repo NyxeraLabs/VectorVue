@@ -31,6 +31,7 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
     def setUp(self) -> None:
         self._env_backup = dict(os.environ)
         self.private_key = Ed25519PrivateKey.generate()
+        self.feedback_private_key = Ed25519PrivateKey.generate()
         public_key_raw = self.private_key.public_key().public_bytes_raw()
         self.public_key_b64 = base64.b64encode(public_key_raw).decode("utf-8")
         self.cert_fp = "a" * 64
@@ -39,7 +40,10 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         os.environ["VV_TG_SPECTRASTRIKE_ED25519_PUBKEY"] = self.public_key_b64
         os.environ["VV_TG_REQUIRE_MTLS"] = "1"
         os.environ["VV_TG_REQUIRE_PAYLOAD_SIGNATURE"] = "1"
-        os.environ["VV_TG_FEEDBACK_SIGNING_SECRET"] = "feedback-test-secret"
+        os.environ["VV_TG_FEEDBACK_ACTIVE_KID"] = "kid-001"
+        with open("/tmp/vv_feedback_ed25519.key", "wb") as f:
+            f.write(self.feedback_private_key.private_bytes_raw())
+        os.environ["VV_TG_FEEDBACK_ED25519_KEYS_JSON"] = '{"kid-001":"/tmp/vv_feedback_ed25519.key"}'
         os.environ["VV_TG_ALLOWED_CLOCK_SKEW_SECONDS"] = "30"
         os.environ["VV_TG_NONCE_TTL_SECONDS"] = "120"
         os.environ["VV_TG_NONCE_BACKEND"] = "memory"
@@ -91,7 +95,10 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
                 "mitre_techniques": ["T1059.001"],
                 "mitre_tactics": ["TA0002"],
                 "description": "Observed suspicious process chain",
-                "attributes": {"asset_ref": "host-nyc-01"},
+                "attributes": {
+                    "asset_ref": "host-nyc-01",
+                    "attestation_measurement_hash": "b" * 64,
+                },
             },
         }
 
@@ -293,10 +300,12 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
             "timestamp": int(time.time()),
             "nonce": "nonce-020",
             "schema_version": "execution.graph.v1",
+            "attestation_measurement_hash": "c" * 64,
             "graph": {
                 "graph_id": "g-001",
                 "tenant_id": "10000000-0000-0000-0000-000000000001",
                 "target_urn": "urn:target:ip:10.0.0.5",
+                "attestation_measurement_hash": "c" * 64,
                 "nodes": [{"id": "n1"}, {"id": "n2"}],
                 "edges": [{"from": "n1", "to": "n2"}],
             },
@@ -323,6 +332,8 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         self.assertEqual(feedback_res.status_code, 200)
         body = feedback_res.json()
         self.assertIn("signature", body)
+        self.assertEqual(body.get("signature_algorithm"), "Ed25519")
+        self.assertEqual(body.get("kid"), "kid-001")
         self.assertIn("signed_at", body)
         self.assertIn("nonce", body)
         self.assertEqual(body.get("schema_version"), "feedback.response.v1")
@@ -330,6 +341,31 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
         self.assertTrue(isinstance(body.get("data"), list))
         self.assertEqual(body["data"][0]["tenant_id"], query_payload["tenant_id"])
         self.assertEqual(body["data"][0]["execution_fingerprint"], "c" * 64)
+
+    def test_rejects_execution_graph_schema_mismatch(self):
+        graph_payload = {
+            "operator_id": "op-001",
+            "tenant_id": "10000000-0000-0000-0000-000000000001",
+            "execution_fingerprint": "c" * 64,
+            "timestamp": int(time.time()),
+            "nonce": "nonce-020b",
+            "schema_version": "execution.graph.v0",
+            "attestation_measurement_hash": "c" * 64,
+            "graph": {
+                "graph_id": "g-001",
+                "tenant_id": "10000000-0000-0000-0000-000000000001",
+                "target_urn": "urn:target:ip:10.0.0.5",
+                "attestation_measurement_hash": "c" * 64,
+                "nodes": [{"id": "n1"}],
+                "edges": [],
+            },
+        }
+        graph_res = self.client.post(
+            "/internal/v1/cognitive/execution-graph",
+            headers=self._signed_headers(graph_payload),
+            json=graph_payload,
+        )
+        self.assertEqual(graph_res.status_code, 422)
 
     def test_rejects_unsigned_feedback_query(self):
         query_payload = {

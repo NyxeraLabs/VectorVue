@@ -31,6 +31,7 @@ class Phase9Sprint91GatewayAttackSimulationTests(unittest.TestCase):
     def setUp(self) -> None:
         self._env_backup = dict(os.environ)
         self.private_key = Ed25519PrivateKey.generate()
+        self.feedback_private_key = Ed25519PrivateKey.generate()
         self.cert_fp = "a" * 64
         self.public_key_b64 = base64.b64encode(self.private_key.public_key().public_bytes_raw()).decode("utf-8")
 
@@ -40,7 +41,10 @@ class Phase9Sprint91GatewayAttackSimulationTests(unittest.TestCase):
         os.environ["VV_TG_SPECTRASTRIKE_ED25519_PUBKEY"] = self.public_key_b64
         os.environ["VV_TG_REQUIRE_MTLS"] = "1"
         os.environ["VV_TG_REQUIRE_PAYLOAD_SIGNATURE"] = "1"
-        os.environ["VV_TG_FEEDBACK_SIGNING_SECRET"] = "feedback-test-secret"
+        os.environ["VV_TG_FEEDBACK_ACTIVE_KID"] = "kid-001"
+        with open("/tmp/vv_feedback_ed25519_phase9.key", "wb") as f:
+            f.write(self.feedback_private_key.private_bytes_raw())
+        os.environ["VV_TG_FEEDBACK_ED25519_KEYS_JSON"] = '{"kid-001":"/tmp/vv_feedback_ed25519_phase9.key"}'
         os.environ["VV_TG_ALLOWED_CLOCK_SKEW_SECONDS"] = "30"
         os.environ["VV_TG_NONCE_TTL_SECONDS"] = "120"
         os.environ["VV_TG_NONCE_BACKEND"] = "memory"
@@ -92,7 +96,10 @@ class Phase9Sprint91GatewayAttackSimulationTests(unittest.TestCase):
                 "mitre_techniques": ["T1059.001"],
                 "mitre_tactics": ["TA0002"],
                 "description": "Observed suspicious process chain",
-                "attributes": {"asset_ref": "host-nyc-01"},
+                "attributes": {
+                    "asset_ref": "host-nyc-01",
+                    "attestation_measurement_hash": "b" * 64,
+                },
             },
         }
 

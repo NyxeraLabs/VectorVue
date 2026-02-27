@@ -1,3 +1,9 @@
+#
+# Copyright (c) 2026 NyxeraLabs
+# Author: Jose Maria Micoli
+# Licensed under BSL 1.1
+# Change Date: 2033-02-22 -> Apache-2.0
+#
 name: CI
 
 on:
@@ -53,6 +59,9 @@ jobs:
 
       - name: Run tests
         run: python -m unittest discover -s tests/unit -p "test_*.py" -v
+
+      - name: Enforce license headers
+        run: python scripts/check_license_headers.py
 
       - name: Build
         run: python -m compileall -q .
