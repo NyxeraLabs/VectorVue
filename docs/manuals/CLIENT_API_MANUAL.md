@@ -82,7 +82,7 @@ Client analytics response contract:
 Compliance responses include:
 
 - `data`
-- `signature` (HMAC-SHA256 envelope)
+- `signature` (cryptographic signature envelope)
 
 ## 6. Example Login Flow
 

@@ -82,10 +82,11 @@ VV_HSM_EVIDENCE_ROOT_KEY_ID ?= vv-evidence-root-v1
 VV_HSM_ROOT_KEYS_JSON ?= {"vv-evidence-root-v1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}
 
 # Optional local demo/preflight environment file (gitignored)
+-include local_federation/.env.vectorvue.local
 -include .env.demo-preflight.local
 export VV_TG_ALLOWED_SERVICE_IDENTITIES_JSON VV_TG_SPECTRASTRIKE_ED25519_PUBKEY VV_FEDERATION_SPECTRASTRIKE_ED25519_PUBKEY VV_TG_OPERATOR_TENANT_MAP VV_HSM_ROOT_KEYS_JSON VV_HSM_EVIDENCE_ROOT_KEY_ID DB_PASSPHRASE
 
-.PHONY: help wizard venv-rebuild run-tui run-local-postgres install legal-install-check deploy commercial-deploy customer-deploy customer-deploy-isolated customer-deploy-portal-isolated tenant-bootstrap-real phase79-real-smoke phase65-bootstrap api-up api-down api-logs api-smoke phase7a-check portal-install portal-dev portal-build portal-start phase7b-check phase6-up phase6-test phase6-down phase6-reset phase6-airgap phase6-hardening phase6-all pg-schema-bootstrap phase65-migrate phase7d-migrate phase7e-migrate phase8-migrate phase9-migrate pg-reset pg-migrate pg-seed seed-clients pg-smoke print-access-matrix spectrastrike-preflight security-policy-gate security-regression redteam-validate spectrastrike-connect-check evidence-crypto-preflight demo-preflight-help bootstrap-local-integration
+.PHONY: help wizard venv-rebuild run-tui run-local-postgres install legal-install-check deploy commercial-deploy customer-deploy customer-deploy-isolated customer-deploy-portal-isolated tenant-bootstrap-real phase79-real-smoke phase65-bootstrap api-up api-down api-logs api-smoke phase7a-check portal-install portal-dev portal-build portal-start phase7b-check phase6-up phase6-test phase6-down phase6-reset phase6-airgap phase6-hardening phase6-all pg-schema-bootstrap phase65-migrate phase7d-migrate phase7e-migrate phase8-migrate phase9-migrate pg-reset pg-migrate pg-seed seed-clients pg-smoke print-access-matrix spectrastrike-preflight security-policy-gate security-regression redteam-validate spectrastrike-connect-check evidence-crypto-preflight demo-preflight-help bootstrap-local-integration local-federation-up
 
 help:
 	@echo "VectorVue PostgreSQL operational targets"
@@ -138,6 +139,7 @@ help:
 	@echo "  make evidence-crypto-preflight - Validate required evidence encryption HSM env config"
 	@echo "  make demo-preflight-help - Print how to populate .env.demo-preflight.local"
 	@echo "  make bootstrap-local-integration - Create local integration deliverables + demo preflight env file"
+	@echo "  make local-federation-up - Bootstrap gitignored local federation env and start stack"
 	@echo ""
 	@echo "Overrides:"
 	@echo "  PG_URL='postgresql://user:pass@postgres:5432/vectorvue_db'"
@@ -575,3 +577,35 @@ bootstrap-local-integration:
 		"VV_DB_PASSPHRASE=$(DB_PASSPHRASE)" \
 		> .env.demo-preflight.local; \
 	fi
+
+local-federation-up:
+	@mkdir -p local_federation/certs
+	@if [ ! -f local_federation/.env.vectorvue.local ]; then \
+		printf '%s\n' \
+		"# Local-only VectorVue federation runtime config (gitignored)" \
+		"VV_TG_ALLOWED_SERVICE_IDENTITIES_JSON={\"spectrastrike-producer\":\"a8525203fbc1ecf03b1ccf2d21b9f6faeeb8d84ba291a823d24c087cb4ca48df\"}" \
+		"VV_TG_OPERATOR_TENANT_MAP={\"op-001\":\"10000000-0000-0000-0000-000000000001\"}" \
+		"VV_TG_REQUIRE_MTLS=1" \
+		"VV_TG_REQUIRE_PAYLOAD_SIGNATURE=1" \
+		"VV_TG_ENFORCE_SCHEMA_VERSION=1" \
+		"VV_TG_ALLOWED_SCHEMA_VERSION=1.0" \
+		"VV_TG_FEEDBACK_ACTIVE_KID=default" \
+		"VV_TG_FEEDBACK_ED25519_KEYS_JSON={\"default\":\"/home/xoce/Workspace/VectorVue/deploy/certs/vectorvue_feedback_ed25519.key\"}" \
+		"VV_TG_SPECTRASTRIKE_ED25519_PUBKEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" \
+		> local_federation/.env.vectorvue.local; \
+	fi
+	@if [ ! -f local_federation/federation-compose.override.yml ]; then \
+		printf '%s\n' \
+		"services:" \
+		"  vectorvue_app:" \
+		"    env_file:" \
+		"      - ./local_federation/.env.vectorvue.local" \
+		"  vectorvue_telemetry_gateway:" \
+		"    env_file:" \
+		"      - ./local_federation/.env.vectorvue.local" \
+		"  nginx:" \
+		"    env_file:" \
+		"      - ./local_federation/.env.vectorvue.local" \
+		> local_federation/federation-compose.override.yml; \
+	fi
+	docker compose --env-file local_federation/.env.vectorvue.local -f docker-compose.yml -f local_federation/federation-compose.override.yml up -d postgres redis nats vectorvue_app vectorvue_portal vectorvue_telemetry_gateway nginx
