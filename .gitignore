@@ -120,3 +120,4 @@ vectorvue_db_backup.dump
 *.dump
 
 .obsidian/
+local_federation/

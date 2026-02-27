@@ -104,6 +104,13 @@ class CanonicalTelemetryPayload(BaseModel):
                 clean_attributes[clean_key] = _sanitize_text(raw_value)[:1024]
             else:
                 clean_attributes[clean_key] = raw_value
+        attestation_hash = str(
+            clean_attributes.get("attestation_measurement_hash", "")
+        ).strip()
+        if not re.fullmatch(r"^[a-fA-F0-9]{64}$", attestation_hash):
+            raise ValueError(
+                "attributes.attestation_measurement_hash must be 64-char sha256 hex"
+            )
         self.attributes = clean_attributes
         return self
 

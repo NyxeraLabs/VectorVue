@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import base64
-import hmac
 import hashlib
 import json
 import os
@@ -31,7 +30,11 @@ from typing import Any
 from uuid import uuid4
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from redis import Redis
@@ -82,6 +85,9 @@ class ExecutionGraphMetadataRequest(BaseModel):
     timestamp: int
     nonce: str = Field(min_length=8, max_length=128)
     schema_version: str = Field(min_length=1, max_length=32)
+    attestation_measurement_hash: str = Field(
+        min_length=64, max_length=64, pattern=r"^[a-fA-F0-9]{64}$"
+    )
     graph: dict[str, Any]
 
 
@@ -108,6 +114,9 @@ class FeedbackAdjustment(BaseModel):
     ttl_seconds: int = Field(default=3600, ge=60, le=86400)
     timestamp: int
     schema_version: str = Field(min_length=1, max_length=32)
+    attestation_measurement_hash: str = Field(
+        min_length=64, max_length=64, pattern=r"^[a-fA-F0-9]{64}$"
+    )
 
 
 class FederationVerifyRequest(BaseModel):
@@ -140,7 +149,8 @@ class GatewaySettings:
     operator_tenant_map: dict[str, str]
     enforce_schema_version: bool
     allowed_schema_version: str
-    feedback_signing_secret: str
+    feedback_signing_keys: dict[str, str]
+    feedback_active_kid: str
 
 
 class ReplayGuard:
@@ -227,9 +237,12 @@ def _load_settings() -> GatewaySettings:
     if skew < 1 or nonce_ttl < 30 or rate_limit_per_min < 1:
         raise RuntimeError("Clock skew must be >=1, nonce TTL >=30, and rate limit >=1")
 
-    feedback_signing_secret = os.environ.get("VV_TG_FEEDBACK_SIGNING_SECRET", "").strip()
-    if not feedback_signing_secret:
-        raise RuntimeError("VV_TG_FEEDBACK_SIGNING_SECRET must be configured")
+    feedback_signing_keys = _load_feedback_signing_keys()
+    feedback_active_kid = os.environ.get("VV_TG_FEEDBACK_ACTIVE_KID", "").strip()
+    if not feedback_active_kid:
+        raise RuntimeError("VV_TG_FEEDBACK_ACTIVE_KID must be configured")
+    if feedback_active_kid not in feedback_signing_keys:
+        raise RuntimeError("VV_TG_FEEDBACK_ACTIVE_KID must exist in signing key map")
 
     return GatewaySettings(
         require_mtls=_parse_bool("VV_TG_REQUIRE_MTLS", "1"),
@@ -247,9 +260,10 @@ def _load_settings() -> GatewaySettings:
         rate_limit_backend=os.environ.get("VV_TG_RATE_LIMIT_BACKEND", "redis").strip().lower(),
         queue_backend=os.environ.get("VV_TG_QUEUE_BACKEND", "nats").strip().lower(),
         operator_tenant_map=_load_operator_tenant_map(),
-        enforce_schema_version=_parse_bool("VV_TG_ENFORCE_SCHEMA_VERSION", "0"),
+        enforce_schema_version=_parse_bool("VV_TG_ENFORCE_SCHEMA_VERSION", "1"),
         allowed_schema_version=os.environ.get("VV_TG_ALLOWED_SCHEMA_VERSION", "1.0").strip(),
-        feedback_signing_secret=feedback_signing_secret,
+        feedback_signing_keys=feedback_signing_keys,
+        feedback_active_kid=feedback_active_kid,
     )
 
 
@@ -289,6 +303,26 @@ def _load_operator_tenant_map() -> dict[str, str]:
         if not key or not re.fullmatch(r"^[a-fA-F0-9-]{36}$", value):
             raise RuntimeError("VV_TG_OPERATOR_TENANT_MAP values must be UUID strings")
         out[key] = value
+    return out
+
+
+def _load_feedback_signing_keys() -> dict[str, str]:
+    raw = os.environ.get("VV_TG_FEEDBACK_ED25519_KEYS_JSON", "").strip() or "{}"
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("VV_TG_FEEDBACK_ED25519_KEYS_JSON must be valid JSON object") from exc
+    if not isinstance(parsed, dict) or not parsed:
+        raise RuntimeError("VV_TG_FEEDBACK_ED25519_KEYS_JSON must be a non-empty object")
+    out: dict[str, str] = {}
+    for kid, path in parsed.items():
+        key_id = str(kid).strip()
+        key_path = str(path).strip()
+        if not key_id or not key_path:
+            raise RuntimeError("feedback signing key ids/paths cannot be empty")
+        if not Path(key_path).exists():
+            raise RuntimeError(f"feedback signing key missing: {key_path}")
+        out[key_id] = key_path
     return out
 
 
@@ -435,15 +469,31 @@ def _feedback_signature(
     tenant_id: str,
     signed_at: int,
     nonce: str,
+    schema_version: str,
     payload: list[dict[str, Any]],
-) -> str:
+) -> tuple[str, str, str]:
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    signing_input = f"{tenant_id}|{signed_at}|{nonce}|{canonical}"
-    return hmac.new(
-        settings.feedback_signing_secret.encode("utf-8"),
-        signing_input.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    kid = settings.feedback_active_kid
+    key_path = settings.feedback_signing_keys[kid]
+    signing_input = (
+        f"{tenant_id}|{signed_at}|{nonce}|{schema_version}|{kid}|{canonical}"
+    ).encode("utf-8")
+    try:
+        key_bytes = Path(key_path).read_bytes()
+        if len(key_bytes) == 32:
+            private_key = Ed25519PrivateKey.from_private_bytes(key_bytes)
+        else:
+            loaded = serialization.load_pem_private_key(key_bytes, password=None)
+            if not isinstance(loaded, Ed25519PrivateKey):
+                raise ValueError("private key is not Ed25519")
+            private_key = loaded
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Feedback signing key load failed",
+        ) from exc
+    signature = private_key.sign(signing_input)
+    return kid, "Ed25519", base64.b64encode(signature).decode("utf-8")
 
 
 def _build_feedback_adjustments(
@@ -461,6 +511,14 @@ def _build_feedback_adjustments(
             action = "tighten"
             confidence = 0.82
             rationale = "high-complexity execution graph exceeded cognitive threshold"
+        attestation_hash = str(
+            record.attestation_measurement_hash
+            or record.graph.get("attestation_measurement_hash", "")
+        ).strip().lower()
+        if not HEX_64_RE.fullmatch(attestation_hash):
+            attestation_hash = hashlib.sha256(
+                f"{record.execution_fingerprint.lower()}|attestation".encode("utf-8")
+            ).hexdigest()
         out.append(
             FeedbackAdjustment(
                 tenant_id=record.tenant_id,
@@ -473,6 +531,7 @@ def _build_feedback_adjustments(
                 ttl_seconds=1800,
                 timestamp=int(time.time()),
                 schema_version="feedback.adjustment.v1",
+                attestation_measurement_hash=attestation_hash,
             )
         )
     return out
@@ -681,6 +740,11 @@ async def ingest_execution_graph(request: Request) -> dict[str, Any]:
             detail="Unsigned telemetry is disabled by policy",
         )
     payload = ExecutionGraphMetadataRequest.model_validate_json(raw)
+    if settings.enforce_schema_version and payload.schema_version != "execution.graph.v1":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Execution graph schema version is not allowed",
+        )
     _enforce_operator_tenant_pair(
         operator_id=payload.operator_id,
         tenant_id=payload.tenant_id,
@@ -739,12 +803,14 @@ async def query_feedback_adjustments(request: Request) -> dict[str, Any]:
     signed_at = int(time.time())
     response_nonce = secrets.token_urlsafe(18)
     signature = _feedback_signature(
+        schema_version="feedback.response.v1",
         settings=settings,
         tenant_id=query.tenant_id,
         signed_at=signed_at,
         nonce=response_nonce,
         payload=data,
     )
+    kid, signature_algorithm, signature_b64 = signature
     audit_log.append_event(
         event_type="cognitive.feedback.issued",
         actor="telemetry_gateway",
@@ -759,7 +825,9 @@ async def query_feedback_adjustments(request: Request) -> dict[str, Any]:
         "status": "accepted",
         "data": data,
         "errors": [],
-        "signature": signature,
+        "signature": signature_b64,
+        "kid": kid,
+        "signature_algorithm": signature_algorithm,
         "signed_at": signed_at,
         "nonce": response_nonce,
         "schema_version": "feedback.response.v1",
