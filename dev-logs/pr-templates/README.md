@@ -1,3 +1,16 @@
+<!-- NYXERA_BRANDING_HEADER_START -->
+<p align="center">
+  <img src="https://docs.vectorvue.nyxera.cloud/assets/img/product-logo.png" alt="VectorVue" width="220" />
+</p>
+
+<p align="center">
+  <a href="https://docs.vectorvue.nyxera.cloud">Docs</a> |
+  <a href="https://vectorvue.nyxera.cloud">VectorVue</a> |
+  <a href="https://nexus.nyxera.cloud">Nexus</a> |
+  <a href="https://nyxera.cloud">Nyxera Labs</a>
+</p>
+<!-- NYXERA_BRANDING_HEADER_END -->
+
 # PR Templates by Sprint
 
 This folder contains PR description templates for the security expansion sprints completed in this execution cycle.
@@ -31,3 +44,23 @@ This folder contains PR description templates for the security expansion sprints
 | 7 | 7.1 | `feat/phase-7-sprint-7-1-federation-protocol` | `feat` |
 | 8 | 8.1 | `feat/phase-8-sprint-8-1-security-ci-enforcement` | `ci` |
 | 9 | 9.1 | `feat/phase-9-sprint-9-1-redteam-validation` | `test` |
+
+<!-- NYXERA_BRANDING_FOOTER_START -->
+
+---
+
+<p align="center">
+  <img src="https://docs.vectorvue.nyxera.cloud/assets/img/nyxera-logo.png" alt="Nyxera Labs" width="110" />
+</p>
+
+<p align="center">
+  2026 VectorVue by Nyxera Labs. All rights reserved.
+</p>
+
+<p align="center">
+  <a href="https://docs.vectorvue.nyxera.cloud">Docs</a> |
+  <a href="https://vectorvue.nyxera.cloud">VectorVue</a> |
+  <a href="https://nexus.nyxera.cloud">Nexus</a> |
+  <a href="https://nyxera.cloud">Nyxera Labs</a>
+</p>
+<!-- NYXERA_BRANDING_FOOTER_END -->
