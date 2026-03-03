@@ -609,3 +609,11 @@ local-federation-up:
 		> local_federation/federation-compose.override.yml; \
 	fi
 	docker compose --env-file local_federation/.env.vectorvue.local -f docker-compose.yml -f local_federation/federation-compose.override.yml up -d postgres redis nats vectorvue_app vectorvue_portal vectorvue_telemetry_gateway nginx
+	@echo ""
+	@echo "Local federation is up."
+	@echo "VectorVue UI URLs:"
+	@echo "  - http://127.0.0.1"
+	@echo "  - https://127.0.0.1"
+	@echo "If SpectraStrike stack is also running, open:"
+	@echo "  - http://127.0.0.1:18080"
+	@echo "  - https://127.0.0.1:18443"

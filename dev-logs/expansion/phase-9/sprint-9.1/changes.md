@@ -17,5 +17,13 @@
 - `tests/unit/test_phase7_sprint72_behavioral_ml.py`
   - Added required license-header markers for CI enforcement compatibility.
 
+- `Makefile`
+  - Added explicit UI URL output at the end of `local-federation-up`.
+
+- `portal/lib/intelligence-metrics.mjs.d.ts`
+- `portal/lib/nexus-context.mjs.d.ts`
+  - Added declaration bridge files for `.mjs` imports referenced by TSX pages.
+
 ## Reason for each change
 - Remove workflow failures from license-header gate without changing runtime behavior.
+- Improve startup ergonomics and resolve CI type-check failure on extension-based module imports.

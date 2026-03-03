@@ -11,3 +11,7 @@ Stabilize CI workflow execution for lint/license gates across SpectraStrike and 
 ## Risk considerations
 - Missing headers can reappear as new files are added without templates.
 - CI remains dependent on dependency install availability for full suite execution.
+
+## Addendum - 2026-03-03 federation UX + typing compatibility
+- Added startup URL output to local federation target for immediate operator visibility.
+- Added explicit `.mjs` declaration bridge files to resolve Next.js TypeScript build checks for extension-based imports.

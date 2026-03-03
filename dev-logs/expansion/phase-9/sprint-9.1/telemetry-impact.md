@@ -8,3 +8,7 @@
 
 ## Impact on ingestion pipeline
 - No telemetry pipeline changes.
+
+## Addendum - 2026-03-03
+- No telemetry contract changes.
+- Updates were limited to Makefile output and portal type declaration compatibility.
