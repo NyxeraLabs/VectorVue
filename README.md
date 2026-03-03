@@ -85,7 +85,27 @@ Every telemetry record includes an `attestation_measurement_hash` describing mea
 - End-user guide: `docs/END_USER_GUIDE.md`
 - SDK developer guide: `docs/SDK_DEVELOPER_GUIDE.md`
 - Full federation integration: `docs/FULL_FEDERATION_INTEGRATION.md`
+- First-run guided demo (granular): `docs/FIRST_RUN_GUIDED_DEMO.md`
 - Roadmap: `docs/ROADMAP.md`
+
+## Interactive Demo Flow (Tri-App)
+
+- VectorVue receives guided demo transitions from SpectraStrike/Nexus via `?demo=true`.
+- Demo mode remains explicit and source-tagged (`source=nexus|spectrastrike`).
+- Cross-app links are environment-driven (`VITE_SPECTRASTRIKE_URL`, `VITE_NEXUS_URL`, `VITE_VECTORVUE_URL`) with runtime warnings when unset.
+- Validation walkthrough route: `/portal/validation?demo=true&source=nexus`.
+
+## Telemetry Transparency
+
+- Display raw envelope metadata, signature verification outcome, and attestation binding state.
+- Preserve retry count and upstream federation response detail for operators and auditors.
+- Prefer explicit diagnostics over opaque status booleans.
+
+## Federation Debug Guide
+
+- Inspect envelope id, signature state, attestation hash, and policy verdict together.
+- Track retry attempts and failure reason codes (`signature_mismatch`, attestation mismatch, policy rejection).
+- Use source-tagged demo transitions to rehearse end-to-end troubleshooting across SpectraStrike -> Nexus -> VectorVue.
 
 ## License
 

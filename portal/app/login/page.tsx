@@ -33,6 +33,7 @@ function renderError(code?: string): string | null {
   if (code === 'invalid_credentials_or_tenant') return 'Invalid credentials or tenant ID.';
   if (code === 'tenant_id_required') return 'Tenant ID is required when host mapping is unavailable.';
   if (code === 'registered_login_required') return 'Registration completed. Please login.';
+  if (code === 'registration_disabled') return 'Web registration is disabled. Use the TUI tenant provisioning flow.';
   if (code === 'unknown_tenant_host') return 'This host is not mapped. Provide Tenant ID manually.';
   return 'Authentication failed.';
 }
@@ -94,12 +95,6 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
           >
             Login
           </button>
-          <a
-            href={mappedTenant?.tenantId ? `/register?tenant_id=${encodeURIComponent(mappedTenant.tenantId)}` : '/register'}
-            className="block text-center text-xs text-text-secondary underline"
-          >
-            Register new account
-          </a>
         </form>
       </Card>
     </main>

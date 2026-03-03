@@ -22,7 +22,8 @@ const links = [
   { href: '/portal/findings', label: 'Findings' },
   { href: '/portal/reports', label: 'Reports' },
   { href: '/portal/risk', label: 'Risk' },
-  { href: '/portal/remediation', label: 'Remediation' }
+  { href: '/portal/remediation', label: 'Remediation' },
+  { href: '/portal/nexus', label: 'Nexus' }
 ];
 
 export function Sidebar() {

@@ -103,6 +103,63 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
             },
         }
 
+    def _payload_v2(self, nonce: str, ts: int | None = None) -> dict:
+        payload = self._payload(nonce, ts=ts)
+        payload["payload"]["attributes"]["schema_version"] = "2.0"
+        payload["payload"]["attributes"]["contract_v2"] = {
+            "execution": {
+                "execution_id": f"exec-{nonce}",
+                "lifecycle_state": "running",
+                "previous_lifecycle_state": "dispatched",
+                "started_at": "2026-03-03T11:00:00Z",
+                "completed_at": None,
+                "failure_reason": None,
+                "correlation_id": f"corr-{nonce}",
+            },
+            "asset": {
+                "asset_id": "asset-01",
+                "asset_ref": "urn:asset:host-nyc-01",
+                "hostname": "host-nyc-01",
+                "ip_address": "10.0.0.15",
+                "platform": "linux",
+                "environment": "prod",
+            },
+            "identity": {
+                "principal_id": "operator:op-001",
+                "principal_type": "user",
+                "privilege_level": "high",
+                "account_domain": "corp.local",
+            },
+            "ttp": {
+                "technique_id": "T1059.001",
+                "tactic_id": "TA0002",
+                "subtechnique_id": "T1059.001",
+                "procedure": "shell execution over trusted channel",
+            },
+            "detection": {
+                "detected": True,
+                "detection_source": "edr",
+                "detection_latency_seconds": 8,
+                "alert_id": "alert-123",
+                "alert_severity": "high",
+            },
+            "response": {
+                "responded": True,
+                "response_action": "host isolation",
+                "response_latency_seconds": 45,
+                "contained": True,
+                "containment_latency_seconds": 90,
+            },
+            "control": {
+                "control_id": "edr-control-01",
+                "control_type": "EDR",
+                "control_vendor": "VectorGuard",
+                "control_version": "9.1",
+                "effectiveness_score": 0.88,
+            },
+        }
+        return payload
+
     def _signed_headers(self, payload: dict, cert_fp: str | None = None, service_identity: str = "spectrastrike-producer") -> dict[str, str]:
         raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         msg = f"{payload['timestamp']}.{payload['nonce']}.".encode("utf-8") + raw
@@ -172,6 +229,27 @@ class TelemetryGatewaySecurityTests(unittest.TestCase):
 
         second = self.client.post("/internal/v1/telemetry", headers=headers, json=payload)
         self.assertEqual(second.status_code, 409)
+
+    def test_rejects_non_json_content_type_via_middleware(self):
+        payload = self._payload("nonce-023b")
+        headers = self._signed_headers(payload)
+        headers["Content-Type"] = "text/plain"
+        res = self.client.post("/internal/v1/telemetry", headers=headers, data=json.dumps(payload))
+        self.assertEqual(res.status_code, 415)
+
+    def test_accepts_contract_v2_payload_with_allowed_schema_versions(self):
+        os.environ["VV_TG_ALLOWED_SCHEMA_VERSIONS"] = "1.0,2.0"
+        payload = self._payload_v2("nonce-023c")
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 202)
+
+    def test_rejects_contract_v2_invalid_lifecycle_transition(self):
+        os.environ["VV_TG_ALLOWED_SCHEMA_VERSIONS"] = "1.0,2.0"
+        payload = self._payload_v2("nonce-023d")
+        payload["payload"]["attributes"]["contract_v2"]["execution"]["lifecycle_state"] = "running"
+        payload["payload"]["attributes"]["contract_v2"]["execution"]["previous_lifecycle_state"] = "succeeded"
+        res = self.client.post("/internal/v1/telemetry", headers=self._signed_headers(payload), json=payload)
+        self.assertEqual(res.status_code, 422)
 
     def test_rejects_expired_timestamp(self):
         expired_ts = int(time.time()) - 360
