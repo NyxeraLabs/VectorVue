@@ -26,9 +26,9 @@ test('cross app link helpers fall back and warn when env is missing', () => {
   const originalWarn = console.warn;
   console.warn = (msg) => calls.push(String(msg));
 
-  assert.equal(getNexusUrl(), 'https://localhost:3001');
-  assert.equal(getVectorVueUrl(), 'https://localhost:3002');
-  assert.equal(getSpectraStrikeUrl(), 'https://localhost:3000');
+  assert.equal(getNexusUrl(), 'https://127.0.0.1:18443');
+  assert.equal(getVectorVueUrl(), 'https://127.0.0.1');
+  assert.equal(getSpectraStrikeUrl(), 'https://127.0.0.1:18443');
   assert.equal(calls.length, 3);
 
   console.warn = originalWarn;

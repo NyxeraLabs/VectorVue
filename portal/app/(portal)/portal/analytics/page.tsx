@@ -85,7 +85,7 @@ export default function AnalyticsPage() {
       try {
         setLoading(true);
         const [findingsRes, remediationRes, anomaliesRes] = await Promise.all([
-          fetch('/api/proxy/findings?page=1&page_size=2000', { credentials: 'include', cache: 'no-store' }),
+          fetch('/api/proxy/findings?page=1&page_size=200', { credentials: 'include', cache: 'no-store' }),
           fetch('/api/proxy/remediation', { credentials: 'include', cache: 'no-store' }),
           fetch('/api/proxy/ml/anomalies', { credentials: 'include', cache: 'no-store' })
         ]);
