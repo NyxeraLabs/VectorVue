@@ -1,3 +1,7 @@
+# Copyright (c) 2026 NyxeraLabs
+# Licensed under BSL 1.1
+# Change Date: 2033-02-22 -> Apache-2.0
+
 """Phase 3 Sprint 3.1 tests for control modeling and detection normalization."""
 
 from __future__ import annotations
@@ -101,4 +105,3 @@ class ControlModelingServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

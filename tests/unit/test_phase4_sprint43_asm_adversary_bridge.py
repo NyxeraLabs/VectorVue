@@ -1,3 +1,7 @@
+# Copyright (c) 2026 NyxeraLabs
+# Licensed under BSL 1.1
+# Change Date: 2033-02-22 -> Apache-2.0
+
 """Phase 4 Sprint 4.3 tests for ASM to adversary bridge."""
 
 from __future__ import annotations
@@ -85,4 +89,3 @@ class AsmAdversaryBridgeServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

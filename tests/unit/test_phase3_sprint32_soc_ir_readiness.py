@@ -1,3 +1,7 @@
+# Copyright (c) 2026 NyxeraLabs
+# Licensed under BSL 1.1
+# Change Date: 2033-02-22 -> Apache-2.0
+
 """Phase 3 Sprint 3.2 tests for SOC and IR readiness metrics."""
 
 from __future__ import annotations
@@ -133,4 +137,3 @@ class SocIrReadinessServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

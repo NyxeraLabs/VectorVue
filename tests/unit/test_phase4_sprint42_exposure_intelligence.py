@@ -1,3 +1,7 @@
+# Copyright (c) 2026 NyxeraLabs
+# Licensed under BSL 1.1
+# Change Date: 2033-02-22 -> Apache-2.0
+
 """Phase 4 Sprint 4.2 tests for exposure intelligence lifecycle."""
 
 from __future__ import annotations
@@ -109,4 +113,3 @@ class ExposureIntelligenceServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
