@@ -135,6 +135,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _is_idempotent_duplicate_type(stmt: str, exc: Exception) -> bool:
+    text = stmt.strip().lower()
+    if not text.startswith("create type"):
+        return False
+    sqlstate = getattr(exc, "sqlstate", "")
+    message = str(exc).lower()
+    if sqlstate in {"42710", "23505"}:
+        return True
+    if "already exists" in message and "type" in message:
+        return True
+    if "pg_type_typname_nsp_index" in message:
+        return True
+    return False
+
+
 def main() -> int:
     args = parse_args()
     sql_path = Path(args.sql)
@@ -147,7 +162,12 @@ def main() -> int:
     with psycopg.connect(args.pg_url, autocommit=False) as conn:
         with conn.cursor() as cur:
             for stmt in statements:
-                cur.execute(stmt)
+                try:
+                    cur.execute(stmt)
+                except Exception as exc:  # noqa: BLE001
+                    if _is_idempotent_duplicate_type(stmt, exc):
+                        continue
+                    raise
         conn.commit()
 
     print(f"Applied {len(statements)} statements from {sql_path}")
