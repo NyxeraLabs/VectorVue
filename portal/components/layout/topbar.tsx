@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import NotificationCenter from '@/components/NotificationCenter';
-import { accessibilityChecklist, applyTheme, encodeWorkspaceState, keyboardShortcutTarget, nextTheme, parseWorkspaceState, reduceRenderBudget, ROLE_LABELS, roleAllowsPowerMode, roleCanExport } from '@/lib/global-ui.mjs';
+import { accessibilityChecklist, applyTheme, encodeWorkspaceState, keyboardShortcutTarget, nextTheme, parseWorkspaceState, reduceRenderBudget, ROLE_LABELS, roleAllowsPowerMode, roleCanExport } from '@/lib/global-ui';
 import { type PortalLang, t } from '@/lib/i18n';
 import type { ClientTheme } from '@/lib/types';
 import TenantLogo from '@/components/TenantLogo';
