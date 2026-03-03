@@ -20,7 +20,28 @@ import { resolveTenantFromHost } from '@/lib/tenant-host';
 
 const TOKEN_COOKIE = 'vv_access_token';
 
+function isHttpsRequest(request: NextRequest): boolean {
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  if (forwardedProto) {
+    return forwardedProto.split(',')[0].trim().toLowerCase() === 'https';
+  }
+  return request.nextUrl.protocol.replace(':', '').toLowerCase() === 'https';
+}
+
 export function middleware(request: NextRequest) {
+  if (!isHttpsRequest(request)) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.protocol = 'https:';
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
+  if (request.nextUrl.pathname === '/register') {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = '/login';
+    loginUrl.searchParams.set('error', 'registration_disabled');
+    return NextResponse.redirect(loginUrl, 308);
+  }
+
   const token = request.cookies.get(TOKEN_COOKIE)?.value;
   const isPortal = request.nextUrl.pathname.startsWith('/portal');
   const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? request.nextUrl.host;
@@ -42,5 +63,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/portal/:path*']
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)']
 };

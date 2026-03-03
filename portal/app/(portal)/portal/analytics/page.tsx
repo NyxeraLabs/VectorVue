@@ -44,7 +44,7 @@ import {
   buildSocPerformance,
   buildTelemetryCompleteness,
   buildTechniqueConfidenceSeries
-} from '@/lib/intelligence-metrics.mjs';
+} from '@/lib/intelligence-metrics';
 import { trackDashboardView } from '@/lib/telemetry';
 import type { ClientFinding, ClientMLInsight, Paginated, RemediationTask } from '@/lib/types';
 import { brandTheme } from '@/styles/theme';
