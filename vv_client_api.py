@@ -23,10 +23,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
@@ -99,10 +102,46 @@ def _db_url() -> str:
 engine = create_engine(_db_url(), pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 metadata = MetaData()
+table_cache: dict[str, Table] = {}
+
+logger = logging.getLogger("vectorvue.client_api")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION)
 app.include_router(compliance_router)
+
+
+@app.middleware("http")
+async def request_observability_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    request_id = request.headers.get("x-request-id") or str(uuid4())
+    response: Response | None = None
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        elapsed_ms = round((time.perf_counter() - started) * 1000.0, 2)
+        tenant_hint = request.headers.get("x-tenant-id", "")
+        logger.info(
+            json.dumps(
+                {
+                    "event": "http_request",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": status_code,
+                    "duration_ms": elapsed_ms,
+                    "tenant_hint": tenant_hint,
+                }
+            )
+        )
+        if response is not None:
+            response.headers["x-request-id"] = request_id
+            response.headers["x-response-time-ms"] = str(elapsed_ms)
 
 
 class ClientAuthLoginRequest(BaseModel):
@@ -194,7 +233,12 @@ def _get_db() -> Session:
 
 
 def _load_table(name: str) -> Table:
-    return Table(name, metadata, autoload_with=engine)
+    cached = table_cache.get(name)
+    if cached is not None:
+        return cached
+    table = Table(name, metadata, autoload_with=engine)
+    table_cache[name] = table
+    return table
 
 
 def _require_tenant_column(table: Table) -> None:

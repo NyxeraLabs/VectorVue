@@ -1,0 +1,22 @@
+{
+  "profiles": [
+    {
+      "name": "balanced",
+      "users": 20,
+      "duration_sec": 30,
+      "max_error_rate": 0.03
+    },
+    {
+      "name": "read_heavy",
+      "users": 36,
+      "duration_sec": 45,
+      "max_error_rate": 0.05
+    },
+    {
+      "name": "burst",
+      "users": 50,
+      "duration_sec": 20,
+      "max_error_rate": 0.08
+    }
+  ]
+}
