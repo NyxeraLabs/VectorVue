@@ -28,7 +28,7 @@ import {
   exportUnifiedValidationReport,
   mergeUnifiedActivities,
   searchUnifiedActivities
-} from '@/lib/nexus-context.mjs';
+} from '@/lib/nexus-context';
 
 type Activity = {
   source: 'spectrastrike' | 'vectorvue';
@@ -102,7 +102,7 @@ export default function NexusPage() {
   const filtered = useMemo(() => searchUnifiedActivities(feed, query), [feed, query]);
 
   const spectraUrl = useMemo(() => {
-    const base = process.env.NEXT_PUBLIC_SPECTRASTRIKE_BASE_URL ?? 'http://localhost:3000';
+    const base = process.env.NEXT_PUBLIC_SPECTRASTRIKE_BASE_URL ?? 'https://localhost:3000';
     const relay = buildNexusContext({
       tenantId: context.tenantId,
       tenantName: context.tenantName,
