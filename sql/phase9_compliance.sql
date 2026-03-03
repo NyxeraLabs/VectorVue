@@ -14,6 +14,24 @@
 
 -- Phase 9: Continuous Compliance & Regulatory Assurance
 
+DO $$
+BEGIN
+    -- Defensive cleanup for environments that may contain an old standalone
+    -- type named "frameworks" (for example enum/domain), which conflicts with
+    -- CREATE TABLE frameworks due to Postgres' implicit composite type naming.
+    IF EXISTS (
+        SELECT 1
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE n.nspname = current_schema()
+          AND t.typname = 'frameworks'
+          AND t.typrelid = 0
+    ) THEN
+        EXECUTE format('DROP TYPE %I.%I', current_schema(), 'frameworks');
+    END IF;
+END;
+$$;
+
 CREATE TABLE IF NOT EXISTS frameworks (
     id BIGSERIAL PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
