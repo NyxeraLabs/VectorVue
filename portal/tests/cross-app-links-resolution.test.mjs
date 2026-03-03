@@ -26,10 +26,30 @@ test('cross app link helpers fall back and warn when env is missing', () => {
   const originalWarn = console.warn;
   console.warn = (msg) => calls.push(String(msg));
 
-  assert.equal(getNexusUrl(), 'http://localhost:3001');
-  assert.equal(getVectorVueUrl(), 'http://localhost:3002');
-  assert.equal(getSpectraStrikeUrl(), 'http://localhost:3000');
+  assert.equal(getNexusUrl(), 'https://localhost:3001');
+  assert.equal(getVectorVueUrl(), 'https://localhost:3002');
+  assert.equal(getSpectraStrikeUrl(), 'https://localhost:3000');
   assert.equal(calls.length, 3);
 
+  console.warn = originalWarn;
+});
+
+test('cross app link helpers upgrade insecure env urls to https', () => {
+  const calls = [];
+  const originalWarn = console.warn;
+  console.warn = (msg) => calls.push(String(msg));
+
+  process.env.VITE_NEXUS_URL = 'http://nexus.test';
+  process.env.VITE_VECTORVUE_URL = 'http://vectorvue.test';
+  process.env.VITE_SPECTRASTRIKE_URL = 'http://spectrastrike.test';
+
+  assert.equal(getNexusUrl(), 'https://nexus.test');
+  assert.equal(getVectorVueUrl(), 'https://vectorvue.test');
+  assert.equal(getSpectraStrikeUrl(), 'https://spectrastrike.test');
+  assert.equal(calls.length, 3);
+
+  delete process.env.VITE_NEXUS_URL;
+  delete process.env.VITE_VECTORVUE_URL;
+  delete process.env.VITE_SPECTRASTRIKE_URL;
   console.warn = originalWarn;
 });
