@@ -20,6 +20,8 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { Card } from '@/components/ui/card';
+import { getSpectraStrikeUrl } from '@/lib/cross-app-links';
+import { isDemoQuery, nextVectorVueDemoStep } from '@/lib/demo-mode.mjs';
 import {
   buildNexusContext,
   buildSpectraStrikeDeepLink,
@@ -52,6 +54,7 @@ function downloadReport(content: string, filename: string): void {
 
 export default function NexusPage() {
   const params = useSearchParams();
+  const demoActive = isDemoQuery(params.toString());
   const parsed = decodeNexusContext(params.toString());
   const context = parsed ??
     buildNexusContext({
@@ -64,6 +67,17 @@ export default function NexusPage() {
 
   const [query, setQuery] = useState('');
   const [selectedFinding, setSelectedFinding] = useState(context.findingId ?? 'fnd-184');
+  const [demoStep, setDemoStep] = useState(
+    'intro' as
+      | 'intro'
+      | 'envelope_intake'
+      | 'signature_check'
+      | 'attestation_verification'
+      | 'measurement_hash'
+      | 'policy_validation'
+      | 'return_to_spectrastrike'
+      | 'complete'
+  );
 
   const assurance = {
     riskScore: 7.2,
@@ -102,7 +116,7 @@ export default function NexusPage() {
   const filtered = useMemo(() => searchUnifiedActivities(feed, query), [feed, query]);
 
   const spectraUrl = useMemo(() => {
-    const base = process.env.NEXT_PUBLIC_SPECTRASTRIKE_BASE_URL ?? 'https://localhost:3000';
+    const base = getSpectraStrikeUrl();
     const relay = buildNexusContext({
       tenantId: context.tenantId,
       tenantName: context.tenantName,
@@ -120,6 +134,25 @@ export default function NexusPage() {
       <p className="text-sm text-muted">
         Unified navigation and state synchronization between SpectraStrike execution and VectorVue detection assurance.
       </p>
+
+      {demoActive ? (
+        <Card>
+          <h2 className="mb-2 text-sm font-semibold">VectorVue Guided Demo</h2>
+          <p className="text-sm text-text-secondary">Current step: <span className="font-mono">{demoStep}</span></p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded border border-[color:var(--vv-border-subtle)] px-3 py-2 text-sm hover:border-accent"
+              onClick={() => setDemoStep((current) => nextVectorVueDemoStep(current))}
+            >
+              Next Step
+            </button>
+            <a href="/portal/validation?demo=true&source=nexus" className="rounded border border-[color:var(--vv-border-subtle)] px-3 py-2 text-sm hover:border-accent">
+              Validate in VectorVue
+            </a>
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>

@@ -172,7 +172,7 @@ services:
       - /tmp:size=64m,noexec,nosuid,nodev
       - /app/.next/cache:size=128m,nosuid,nodev
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/login >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget --header='x-forwarded-proto: https' -qO- http://127.0.0.1:3000/login >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
