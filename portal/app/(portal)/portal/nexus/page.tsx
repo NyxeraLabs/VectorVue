@@ -127,7 +127,7 @@ export default function NexusPage() {
           openTasks,
           containmentRate
         });
-        const nextFeed = mergeUnifiedActivities([
+        const nextFeed = mergeUnifiedActivities<Activity>([
           {
             source: 'spectrastrike',
             type: 'execution',
@@ -135,9 +135,9 @@ export default function NexusPage() {
             detail: `Campaign ${context.campaignId ?? 'n/a'} active with ${findings.length} telemetry-linked findings`,
             ts: new Date().toISOString()
           },
-          ...findings.slice(0, 6).map((finding) => ({
-            source: 'vectorvue' as const,
-            type: 'detection' as const,
+          ...findings.slice(0, 6).map((finding): Activity => ({
+            source: 'vectorvue',
+            type: 'detection',
             title: `Detection ${finding.id}: ${finding.title}`,
             detail: `${String(finding.status ?? 'open')} severity=${String(finding.severity ?? 'n/a')}`,
             ts: new Date().toISOString()
