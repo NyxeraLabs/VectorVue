@@ -16,12 +16,12 @@ You may NOT:
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { Card } from '@/components/ui/card';
 import { getSpectraStrikeUrl } from '@/lib/cross-app-links';
-import { isDemoQuery, nextVectorVueDemoStep } from '@/lib/demo-mode.mjs';
+import { isDemoQuery, nextVectorVueDemoStep } from '@/lib/demo-mode';
 import {
   buildNexusContext,
   buildSpectraStrikeDeepLink,
@@ -38,6 +38,23 @@ type Activity = {
   title: string;
   detail: string;
   ts: string;
+};
+
+type ClientFinding = {
+  id: number;
+  title: string;
+  severity?: string | null;
+  status?: string | null;
+};
+
+type RemediationTask = {
+  id: number;
+  title: string;
+  status: string;
+};
+
+type RiskSummary = {
+  score?: number;
 };
 
 function downloadReport(content: string, filename: string): void {
@@ -79,39 +96,73 @@ export default function NexusPage() {
       | 'complete'
   );
 
-  const assurance = {
-    riskScore: 7.2,
-    openTasks: 9,
-    containmentRate: 68.4
-  };
+  const [assurance, setAssurance] = useState({
+    riskScore: 0,
+    openTasks: 0,
+    containmentRate: 0
+  });
+  const [feed, setFeed] = useState<Activity[]>([]);
+  const [surfaceStatus, setSurfaceStatus] = useState('Loading live telemetry and remediation surfaces...');
 
-  const feed = useMemo<Activity[]>(
-    () =>
-      mergeUnifiedActivities([
-        {
-          source: 'spectrastrike',
-          type: 'execution',
-          title: 'Campaign execution branch',
-          detail: `Campaign ${context.campaignId ?? 'n/a'} moved into lateral movement stage`,
-          ts: '2026-03-03T13:22:00Z'
-        },
-        {
-          source: 'vectorvue',
-          type: 'detection',
-          title: 'Detection event triaged',
-          detail: `Finding ${selectedFinding} mapped to ATT&CK validation`,
-          ts: '2026-03-03T13:23:10Z'
-        },
-        {
-          source: 'vectorvue',
-          type: 'assurance',
-          title: 'Assurance score recalculated',
-          detail: `Risk ${assurance.riskScore.toFixed(2)} with containment ${assurance.containmentRate.toFixed(1)}%`,
-          ts: '2026-03-03T13:24:00Z'
-        }
-      ]),
-    [assurance.containmentRate, assurance.riskScore, context.campaignId, selectedFinding]
-  );
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetch('/api/proxy/findings?page=1&page_size=20', { credentials: 'include', cache: 'no-store' }).then((res) => res.json()),
+      fetch('/api/proxy/remediation', { credentials: 'include', cache: 'no-store' }).then((res) => res.json()),
+      fetch('/api/proxy/risk', { credentials: 'include', cache: 'no-store' }).then((res) => res.json())
+    ])
+      .then(([findingsBody, remediationBody, riskBody]) => {
+        if (!active) return;
+        const findings: ClientFinding[] = Array.isArray(findingsBody?.items) ? findingsBody.items : [];
+        const remediation: RemediationTask[] = Array.isArray(remediationBody?.items) ? remediationBody.items : [];
+        const risk = (riskBody ?? {}) as RiskSummary;
+        const openTasks = remediation.filter((task) => String(task.status).toLowerCase() !== 'done').length;
+        const riskScore = Number(risk.score ?? 0);
+        const containmentRate = remediation.length === 0
+          ? 0
+          : ((remediation.length - openTasks) / remediation.length) * 100;
+
+        setAssurance({
+          riskScore,
+          openTasks,
+          containmentRate
+        });
+        const nextFeed = mergeUnifiedActivities([
+          {
+            source: 'spectrastrike',
+            type: 'execution',
+            title: 'Campaign execution branch',
+            detail: `Campaign ${context.campaignId ?? 'n/a'} active with ${findings.length} telemetry-linked findings`,
+            ts: new Date().toISOString()
+          },
+          ...findings.slice(0, 6).map((finding) => ({
+            source: 'vectorvue' as const,
+            type: 'detection' as const,
+            title: `Detection ${finding.id}: ${finding.title}`,
+            detail: `${String(finding.status ?? 'open')} severity=${String(finding.severity ?? 'n/a')}`,
+            ts: new Date().toISOString()
+          })),
+          {
+            source: 'vectorvue',
+            type: 'assurance',
+            title: 'Assurance score recalculated',
+            detail: `Risk ${riskScore.toFixed(2)} with containment ${containmentRate.toFixed(1)}%`,
+            ts: new Date().toISOString()
+          }
+        ]);
+        setFeed(nextFeed);
+        setSurfaceStatus('Live telemetry and remediation surfaces loaded.');
+      })
+      .catch(() => {
+        if (!active) return;
+        setFeed([]);
+        setAssurance({ riskScore: 0, openTasks: 0, containmentRate: 0 });
+        setSurfaceStatus('Unable to load live telemetry surfaces.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [context.campaignId]);
 
   const filtered = useMemo(() => searchUnifiedActivities(feed, query), [feed, query]);
 
@@ -188,6 +239,7 @@ export default function NexusPage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <h2 className="mb-2 text-sm font-semibold">Unified Activity Feed</h2>
+          <p className="mb-2 text-xs text-text-secondary">{surfaceStatus}</p>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -201,6 +253,11 @@ export default function NexusPage() {
                 <p className="mt-1 text-xs text-text-secondary">{item.detail}</p>
               </li>
             ))}
+            {filtered.length === 0 ? (
+              <li className="rounded border border-[color:var(--vv-border-subtle)] px-3 py-2 text-sm text-text-secondary">
+                No live telemetry records available.
+              </li>
+            ) : null}
           </ol>
         </Card>
 

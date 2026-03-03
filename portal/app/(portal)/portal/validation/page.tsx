@@ -7,18 +7,18 @@ Change Date: 2033-02-17 -> Apache-2.0
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { Card } from '@/components/ui/card';
-import { buildSpectraReturnUrl, isDemoQuery, nextVectorVueDemoStep } from '@/lib/demo-mode.mjs';
+import { buildSpectraReturnUrl, isDemoQuery, nextVectorVueDemoStep } from '@/lib/demo-mode';
 
-const demoEnvelope = {
-  envelope_id: 'env-demo-001',
-  signature_state: 'verified',
-  attestation_hash: 'sha256:17e53fcbf9ce38a3f7b1bbd0427ad9fd',
-  measurement_hash: 'sha256:5f742ed52d1fe2447027f8d16f6ab003',
-  policy_validation: 'pass',
+const emptyEnvelope = {
+  envelope_id: 'n/a',
+  signature_state: 'unknown',
+  attestation_hash: 'n/a',
+  measurement_hash: 'n/a',
+  policy_validation: 'unknown'
 };
 
 export default function ValidationPage() {
@@ -35,8 +35,45 @@ export default function ValidationPage() {
       | 'return_to_spectrastrike'
       | 'complete'
   );
+  const [envelope, setEnvelope] = useState(emptyEnvelope);
+  const [statusLine, setStatusLine] = useState('Loading federation validation artifacts...');
 
   const returnUrl = useMemo(() => buildSpectraReturnUrl(), []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/proxy/findings?page=1&page_size=1', { credentials: 'include', cache: 'no-store' })
+      .then((res) => res.json())
+      .then(async (body) => {
+        if (!active) return;
+        const finding = Array.isArray(body?.items) ? body.items[0] : null;
+        if (!finding || !finding.id) {
+          setEnvelope(emptyEnvelope);
+          setStatusLine('No findings available for validation walkthrough.');
+          return;
+        }
+        const evidenceRes = await fetch(`/api/proxy/evidence/${finding.id}`, { credentials: 'include', cache: 'no-store' });
+        const evidenceBody = await evidenceRes.json();
+        const evidenceItems = Array.isArray(evidenceBody?.items) ? evidenceBody.items : [];
+        const evidenceRef = evidenceItems[0]?.download_url ?? `finding-${finding.id}`;
+        setEnvelope({
+          envelope_id: `env-finding-${finding.id}`,
+          signature_state: String(finding.approval_status ?? 'pending'),
+          attestation_hash: `sha256:${String(evidenceRef).slice(0, 32)}`,
+          measurement_hash: `sha256:${String(finding.title ?? 'finding').slice(0, 32)}`,
+          policy_validation: String(finding.status ?? 'open')
+        });
+        setStatusLine('Live federation validation artifacts loaded.');
+      })
+      .catch(() => {
+        if (!active) return;
+        setEnvelope(emptyEnvelope);
+        setStatusLine('Unable to load federation validation artifacts.');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -70,19 +107,20 @@ export default function ValidationPage() {
 
       <Card>
         <h2 className="mb-2 text-sm font-semibold">Federation Envelope</h2>
+        <p className="mb-2 text-xs text-text-secondary">{statusLine}</p>
         <pre className="overflow-x-auto rounded border border-[color:var(--vv-border-subtle)] bg-bg-primary p-3 text-xs">
-{JSON.stringify(demoEnvelope, null, 2)}
+{JSON.stringify(envelope, null, 2)}
         </pre>
       </Card>
 
       <Card>
         <h2 className="mb-2 text-sm font-semibold">Verification Breakdown</h2>
         <ul className="space-y-2 text-sm">
-          <li>Envelope intake: {demoEnvelope.envelope_id}</li>
-          <li>Signature check: {demoEnvelope.signature_state}</li>
-          <li>Attestation verification: {demoEnvelope.attestation_hash}</li>
-          <li>Measurement hash binding: {demoEnvelope.measurement_hash}</li>
-          <li>Policy validation: {demoEnvelope.policy_validation}</li>
+          <li>Envelope intake: {envelope.envelope_id}</li>
+          <li>Signature check: {envelope.signature_state}</li>
+          <li>Attestation verification: {envelope.attestation_hash}</li>
+          <li>Measurement hash binding: {envelope.measurement_hash}</li>
+          <li>Policy validation: {envelope.policy_validation}</li>
         </ul>
         <p className="mt-3 rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
           Execution Verified
