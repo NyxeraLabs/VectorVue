@@ -106,15 +106,16 @@ export function Topbar({ tenantName, theme }: TopbarProps) {
   const currentPath = typeof window === 'undefined' ? '' : window.location.pathname;
   const canRecover = Boolean(currentPath) && lastPath !== currentPath;
   const a11yChecks = useMemo(() => accessibilityChecklist(), []);
+  const resolvedTenantName = tenantName.trim() || theme?.company_name?.trim() || 'Customer Tenant';
 
   return (
     <header className="vv-responsive-shell flex min-h-navbar flex-col gap-3 border-b border-[color:var(--vv-border-subtle)] bg-bg-primary px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex items-center gap-4">
         <BrandLogo />
-        <TenantLogo companyName={theme?.company_name ?? tenantName} logoUrl={theme?.logo_url} />
+        <TenantLogo companyName={resolvedTenantName} logoUrl={theme?.logo_url} />
         <div>
           <p className="text-xs uppercase tracking-[0.14em] text-text-secondary">{t(lang, 'tenant')}</p>
-          <p className="text-sm font-semibold text-metallic">{theme?.company_name ?? tenantName}</p>
+          <p className="text-sm font-semibold text-metallic">{resolvedTenantName}</p>
         </div>
       </div>
 
