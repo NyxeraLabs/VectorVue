@@ -42,9 +42,38 @@ You may NOT:
   --vv-text-secondary-rgb: 170 178 213;
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --vv-bg-primary: #f1f4fb;
+  --vv-bg-secondary: #ffffff;
+  --vv-accent: #2c56d8;
+  --vv-accent-hover: #234ac5;
+  --vv-success: #138a4b;
+  --vv-warning: #b67900;
+  --vv-error: #d23034;
+  --vv-text-primary: #1d2a44;
+  --vv-text-secondary: #4e5f84;
+  --vv-border-subtle: rgba(29, 42, 68, 0.15);
+  --vv-metallic-gradient: linear-gradient(90deg, #1d2a44 0%, #2c56d8 55%, #1d2a44 100%);
+  --vv-bg-primary-rgb: 241 244 251;
+  --vv-bg-secondary-rgb: 255 255 255;
+  --vv-accent-rgb: 44 86 216;
+  --vv-accent-hover-rgb: 35 74 197;
+  --vv-success-rgb: 19 138 75;
+  --vv-warning-rgb: 182 121 0;
+  --vv-error-rgb: 210 48 52;
+  --vv-text-primary-rgb: 29 42 68;
+  --vv-text-secondary-rgb: 78 95 132;
+}
+
 body {
   @apply bg-bg-primary text-text-primary font-sans;
   background-image: radial-gradient(circle at 20% 0%, rgb(var(--vv-accent-rgb) / 0.18) 0%, transparent 32%);
+}
+
+*:focus-visible {
+  outline: 2px solid rgb(var(--vv-accent-rgb));
+  outline-offset: 2px;
 }
 
 h1,
@@ -54,6 +83,16 @@ h4,
 h5,
 h6 {
   @apply font-heading;
+}
+
+.vv-responsive-shell {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .vv-responsive-shell {
+    padding-inline: 0.25rem;
+  }
 }
 
 @layer utilities {
