@@ -86,7 +86,7 @@ VV_HSM_ROOT_KEYS_JSON ?= {"vv-evidence-root-v1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 -include .env.demo-preflight.local
 export VV_TG_ALLOWED_SERVICE_IDENTITIES_JSON VV_TG_SPECTRASTRIKE_ED25519_PUBKEY VV_FEDERATION_SPECTRASTRIKE_ED25519_PUBKEY VV_TG_OPERATOR_TENANT_MAP VV_HSM_ROOT_KEYS_JSON VV_HSM_EVIDENCE_ROOT_KEY_ID DB_PASSPHRASE
 
-.PHONY: help wizard venv-rebuild run-tui run-local-postgres install legal-install-check deploy commercial-deploy customer-deploy customer-deploy-isolated customer-deploy-portal-isolated tenant-bootstrap-real phase79-real-smoke phase65-bootstrap api-up api-down api-logs api-smoke phase7a-check portal-install portal-dev portal-build portal-start phase7b-check phase6-up phase6-test phase6-down phase6-reset phase6-airgap phase6-hardening phase6-all pg-schema-bootstrap phase65-migrate phase7d-migrate phase7e-migrate phase8-migrate phase9-migrate pg-reset pg-migrate pg-seed seed-clients pg-smoke print-access-matrix spectrastrike-preflight security-policy-gate security-regression redteam-validate spectrastrike-connect-check evidence-crypto-preflight demo-preflight-help bootstrap-local-integration local-federation-up
+.PHONY: help wizard venv-rebuild run-tui run-local-postgres install legal-install-check deploy commercial-deploy customer-deploy customer-deploy-isolated customer-deploy-portal-isolated tenant-bootstrap-real phase79-real-smoke phase65-bootstrap api-up api-down api-logs api-smoke phase7a-check portal-install portal-dev portal-build portal-start portal-rebuild-ui phase7b-check phase6-up phase6-test phase6-down phase6-reset phase6-airgap phase6-hardening phase6-all pg-schema-bootstrap phase65-migrate phase7d-migrate phase7e-migrate phase8-migrate phase9-migrate pg-reset pg-migrate pg-seed seed-clients pg-smoke print-access-matrix spectrastrike-preflight security-policy-gate security-regression redteam-validate spectrastrike-connect-check evidence-crypto-preflight demo-preflight-help bootstrap-local-integration demo-seed demo-reset local-federation-up
 
 help:
 	@echo "VectorVue PostgreSQL operational targets"
@@ -118,6 +118,7 @@ help:
 	@echo "  make portal-install - Install Next.js portal dependencies"
 	@echo "  make portal-dev - Run Next.js portal in development mode"
 	@echo "  make portal-build - Build Next.js portal for production"
+	@echo "  make portal-rebuild-ui - Rebuild portal/nginx images without cache and restart"
 	@echo "  make portal-start - Start built Next.js portal"
 	@echo "  make phase7b-check - Validate Phase 7B (portal build)"
 	@echo "  make phase6-up  - Generate TLS certs, build, and start Phase 6 stack"
@@ -140,6 +141,8 @@ help:
 	@echo "  make demo-preflight-help - Print how to populate .env.demo-preflight.local"
 	@echo "  make bootstrap-local-integration - Create local integration deliverables + demo preflight env file"
 	@echo "  make local-federation-up - Bootstrap gitignored local federation env and start stack"
+	@echo "  make demo-seed - Seed ACME + Globex datasets for guided demo"
+	@echo "  make demo-reset - Reset VectorVue + SpectraStrike demo state to clean baseline"
 	@echo ""
 	@echo "Overrides:"
 	@echo "  PG_URL='postgresql://user:pass@postgres:5432/vectorvue_db'"
@@ -334,6 +337,10 @@ portal-build:
 
 portal-start:
 	$(NPM) --prefix $(PORTAL_DIR) run start
+
+portal-rebuild-ui:
+	$(DC) build --no-cache vectorvue_portal nginx
+	$(DC) up -d --force-recreate vectorvue_portal nginx
 
 phase7b-check: portal-install portal-build
 
@@ -615,3 +622,24 @@ local-federation-up:
 	@echo "  - https://127.0.0.1"
 	@echo "If SpectraStrike stack is also running, open:"
 	@echo "  - https://127.0.0.1:18443"
+	@echo ""
+	@echo "Next steps (English):"
+	@echo "  1) Guided tour mode (pre-seeded): run 'make demo-seed' in VectorVue."
+	@echo "  2) Open VectorVue Analytics: https://127.0.0.1/portal/analytics"
+	@echo "  3) Open VectorVue Nexus: https://127.0.0.1/portal/nexus?demo=true&source=spectrastrike"
+	@echo "  4) Open Validation walkthrough: https://127.0.0.1/portal/validation?demo=true&source=nexus"
+	@echo "  5) To start from zero, run 'make demo-reset' in VectorVue."
+	@echo "  6) Open TUI consoles:"
+	@echo "     - VectorVue: make run-tui"
+	@echo "     - SpectraStrike: make -C ../SpectraStrike open-tui"
+	@echo "  7) Full guide docs:"
+	@echo "     - VectorVue/docs/FIRST_RUN_GUIDED_DEMO.md"
+	@echo "     - SpectraStrike/docs/FIRST_RUN_GUIDED_DEMO.md"
+
+demo-seed:
+	@$(MAKE) seed-clients
+	@$(MAKE) -C ../SpectraStrike demo-seed SKIP_VECTORVUE_SEED=1
+
+demo-reset:
+	@$(MAKE) pg-reset
+	@$(MAKE) -C ../SpectraStrike demo-reset SKIP_VECTORVUE_RESET=1
