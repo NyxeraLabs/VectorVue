@@ -35,7 +35,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
 )
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from redis import Redis
 from redis.exceptions import RedisError
@@ -43,7 +43,10 @@ from services.federation.schemas import SignedEvidenceBundle
 from services.federation.verifier import federation_bundle_hash, verify_proof_of_origin
 from security.tamper_log import get_tamper_audit_log
 from services.telemetry_gateway.queue import SecureQueuePublisher, clear_memory_messages, load_queue_settings
-from services.telemetry_processing.validator import validate_canonical_payload
+from services.telemetry_processing.validator import (
+    validate_canonical_payload,
+    validate_telemetry_contract_v2,
+)
 
 
 HEX_64_RE = re.compile(r"^[a-fA-F0-9]{64}$")
@@ -149,6 +152,7 @@ class GatewaySettings:
     operator_tenant_map: dict[str, str]
     enforce_schema_version: bool
     allowed_schema_version: str
+    allowed_schema_versions: tuple[str, ...]
     feedback_signing_keys: dict[str, str]
     feedback_active_kid: str
 
@@ -244,6 +248,11 @@ def _load_settings() -> GatewaySettings:
     if feedback_active_kid not in feedback_signing_keys:
         raise RuntimeError("VV_TG_FEEDBACK_ACTIVE_KID must exist in signing key map")
 
+    allowed_schema_versions = _load_allowed_schema_versions(
+        os.environ.get("VV_TG_ALLOWED_SCHEMA_VERSIONS", "").strip(),
+        os.environ.get("VV_TG_ALLOWED_SCHEMA_VERSION", "1.0").strip(),
+    )
+
     return GatewaySettings(
         require_mtls=_parse_bool("VV_TG_REQUIRE_MTLS", "1"),
         allowed_service_identities=allowed_identities,
@@ -262,9 +271,30 @@ def _load_settings() -> GatewaySettings:
         operator_tenant_map=_load_operator_tenant_map(),
         enforce_schema_version=_parse_bool("VV_TG_ENFORCE_SCHEMA_VERSION", "1"),
         allowed_schema_version=os.environ.get("VV_TG_ALLOWED_SCHEMA_VERSION", "1.0").strip(),
+        allowed_schema_versions=allowed_schema_versions,
         feedback_signing_keys=feedback_signing_keys,
         feedback_active_kid=feedback_active_kid,
     )
+
+
+def _load_allowed_schema_versions(raw: str, fallback: str) -> tuple[str, ...]:
+    values: list[str] = []
+    if raw:
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+                if not isinstance(parsed, list):
+                    raise RuntimeError("VV_TG_ALLOWED_SCHEMA_VERSIONS JSON must be an array")
+                values = [str(item).strip() for item in parsed if str(item).strip()]
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("VV_TG_ALLOWED_SCHEMA_VERSIONS must be CSV or JSON array") from exc
+        else:
+            values = [part.strip() for part in raw.split(",") if part.strip()]
+    if not values and fallback.strip():
+        values = [fallback.strip()]
+    if not values:
+        raise RuntimeError("At least one allowed schema version must be configured")
+    return tuple(dict.fromkeys(values))
 
 
 def _load_allowed_service_identities() -> dict[str, str]:
@@ -456,7 +486,7 @@ def _enforce_schema_version(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Telemetry schema version is required by gateway policy",
         )
-    if schema_version != settings.allowed_schema_version:
+    if schema_version not in settings.allowed_schema_versions:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Telemetry schema version is not allowed",
@@ -559,6 +589,33 @@ def _enforce_operator_tenant_pair(
 app = FastAPI(title="VectorVue Telemetry Gateway", version="3.2.0")
 
 
+@app.middleware("http")
+async def telemetry_ingestion_validation_middleware(request: Request, call_next) -> Response:
+    if request.url.path != "/internal/v1/telemetry" or request.method.upper() != "POST":
+        return await call_next(request)
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" not in content_type:
+        return Response(
+            content='{"detail":"Telemetry endpoint only accepts application/json"}',
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            media_type="application/json",
+        )
+    raw = await request.body()
+    if not raw:
+        return Response(
+            content='{"detail":"Telemetry payload is required"}',
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            media_type="application/json",
+        )
+    if len(raw) > 1024 * 1024:
+        return Response(
+            content='{"detail":"Telemetry payload exceeds 1MiB limit"}',
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            media_type="application/json",
+        )
+    return await call_next(request)
+
+
 @app.get("/healthz")
 def healthz() -> dict[str, Any]:
     try:
@@ -573,6 +630,7 @@ def healthz() -> dict[str, Any]:
         "require_payload_signature": settings.require_payload_signature,
         "enforce_schema_version": settings.enforce_schema_version,
         "allowed_schema_version": settings.allowed_schema_version,
+        "allowed_schema_versions": list(settings.allowed_schema_versions),
         "nonce_ttl_seconds": settings.nonce_ttl_seconds,
         "nonce_backend": settings.nonce_backend,
         "rate_limit_per_minute": settings.rate_limit_per_minute,
@@ -684,6 +742,35 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
                 trace={"reason": "canonical_schema", "errors": exc.errors()},
             )
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Canonical telemetry schema validation failed") from exc
+
+        schema_version = str(canonical_payload.attributes.get("schema_version", "")).strip()
+        if schema_version.startswith("2."):
+            try:
+                validate_telemetry_contract_v2(canonical_payload)
+            except ValidationError as exc:
+                await _publish_dead_letter_or_fail(
+                    queue=queue,
+                    raw_body=raw,
+                    error_code="contract_v2_schema_failed",
+                    error_message="Telemetry contract v2 schema validation failed",
+                    trace={"reason": "contract_v2_schema", "errors": exc.errors()},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Telemetry contract v2 schema validation failed",
+                ) from exc
+            except ValueError as exc:
+                await _publish_dead_letter_or_fail(
+                    queue=queue,
+                    raw_body=raw,
+                    error_code="contract_v2_validation_failed",
+                    error_message="Telemetry contract v2 validation failed",
+                    trace={"reason": "contract_v2_validation", "error": str(exc)},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Telemetry contract v2 validation failed",
+                ) from exc
 
         _enforce_signed_tenant_metadata(parsed, settings)
         _enforce_schema_version(parsed, settings)
