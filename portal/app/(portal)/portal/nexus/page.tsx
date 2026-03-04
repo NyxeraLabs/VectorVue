@@ -85,14 +85,14 @@ export default function NexusPage() {
   const [query, setQuery] = useState('');
   const [selectedFinding, setSelectedFinding] = useState(context.findingId ?? 'fnd-184');
   const [demoStep, setDemoStep] = useState(
-    'intro' as
-      | 'intro'
-      | 'envelope_intake'
-      | 'signature_check'
-      | 'attestation_verification'
-      | 'measurement_hash'
-      | 'policy_validation'
-      | 'return_to_spectrastrike'
+    'welcome' as
+      | 'welcome'
+      | 'execution_list_intro'
+      | 'open_execution'
+      | 'signature_validation'
+      | 'attestation_review'
+      | 'policy_status'
+      | 'export_report'
       | 'complete'
   );
 
@@ -194,7 +194,22 @@ export default function NexusPage() {
             <button
               type="button"
               className="rounded border border-[color:var(--vv-border-subtle)] px-3 py-2 text-sm hover:border-accent"
-              onClick={() => setDemoStep((current) => nextVectorVueDemoStep(current))}
+              onClick={() =>
+                setDemoStep((current) => {
+                  const next = nextVectorVueDemoStep(current);
+                  void fetch('/api/proxy/demo/session', {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      source: 'vectorvue-nexus',
+                      step: next,
+                      payload: { route: 'portal/nexus' }
+                    })
+                  });
+                  return next;
+                })
+              }
             >
               Next Step
             </button>

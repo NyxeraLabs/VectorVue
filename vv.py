@@ -16,6 +16,7 @@ You may NOT:
 
 import os
 import sys
+import argparse
 import asyncio
 import subprocess
 from datetime import datetime
@@ -40,6 +41,8 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.reactive import reactive
 from textual.message import Message
+
+from app.demo_tui import reset_demo_state, run_assisted_demo
 
 try:
     from vv_core import (Database, Finding, IntelligenceEngine, CVSSCalculator,
@@ -4850,7 +4853,24 @@ class CyberTUI(App):
         except Exception as e:
             self.update_status(f"EXPORT ERROR: {e}", CyberColors.RED_ALERT)
 
+def _parse_cli_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="VectorVue TUI launcher")
+    parser.add_argument("--demo", action="store_true", help="Run assisted terminal demo flow.")
+    parser.add_argument("--demo-reset", action="store_true", help="Reset assisted demo state.")
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
-    if sys.platform == "win32": os.system("cls")
-    else: os.system("clear")
+    args = _parse_cli_args()
+    if args.demo_reset:
+        reset_demo_state()
+        print("VectorVue demo state reset: ~/.vectorvue/demo_state.json")
+        raise SystemExit(0)
+    if args.demo:
+        run_assisted_demo()
+        raise SystemExit(0)
+    if sys.platform == "win32":
+        os.system("cls")
+    else:
+        os.system("clear")
     CyberTUI().run()

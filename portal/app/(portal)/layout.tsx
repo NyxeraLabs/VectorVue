@@ -18,6 +18,7 @@ import { cookies, headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
 import ThemeBootstrap from '@/components/ThemeBootstrap';
+import { TenantDemoOnboarding } from '@/components/tenant-demo-onboarding';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { API_URL } from '@/lib/config';
@@ -51,6 +52,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
         <Sidebar />
         <div className="flex min-h-screen flex-1 flex-col">
           <Topbar tenantName={tenant} theme={theme} />
+          <TenantDemoOnboarding />
           <main className="flex-1 p-6">{children}</main>
         </div>
       </div>

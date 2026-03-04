@@ -86,7 +86,7 @@ VV_HSM_ROOT_KEYS_JSON ?= {"vv-evidence-root-v1":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 -include .env.demo-preflight.local
 export VV_TG_ALLOWED_SERVICE_IDENTITIES_JSON VV_TG_SPECTRASTRIKE_ED25519_PUBKEY VV_FEDERATION_SPECTRASTRIKE_ED25519_PUBKEY VV_TG_OPERATOR_TENANT_MAP VV_HSM_ROOT_KEYS_JSON VV_HSM_EVIDENCE_ROOT_KEY_ID DB_PASSPHRASE
 
-.PHONY: help wizard venv-rebuild run-tui run-local-postgres install legal-install-check deploy commercial-deploy customer-deploy customer-deploy-isolated customer-deploy-portal-isolated tenant-bootstrap-real phase79-real-smoke phase65-bootstrap api-up api-down api-logs api-smoke phase7a-check portal-install portal-dev portal-build portal-start portal-rebuild-ui phase7b-check phase6-up phase6-test phase6-down phase6-reset phase6-airgap phase6-hardening phase6-all pg-schema-bootstrap phase65-migrate phase7d-migrate phase7e-migrate phase8-migrate phase9-migrate pg-reset pg-migrate pg-seed seed-clients pg-smoke print-access-matrix spectrastrike-preflight security-policy-gate security-regression redteam-validate spectrastrike-connect-check evidence-crypto-preflight demo-preflight-help bootstrap-local-integration demo-seed demo-reset local-federation-up
+.PHONY: help wizard venv-rebuild run-tui run-tui-fast run-tui-demo run-tui-demo-fast run-tui-demo-reset run-tui-demo-reset-fast run-local-postgres install legal-install-check deploy commercial-deploy customer-deploy customer-deploy-isolated customer-deploy-portal-isolated tenant-bootstrap-real phase79-real-smoke phase65-bootstrap api-up api-down api-logs api-smoke phase7a-check portal-install portal-dev portal-build portal-start portal-rebuild-ui phase7b-check phase6-up phase6-test phase6-down phase6-reset phase6-airgap phase6-hardening phase6-all pg-schema-bootstrap phase65-migrate phase7d-migrate phase7e-migrate phase8-migrate phase9-migrate pg-reset pg-migrate pg-seed seed-clients pg-smoke print-access-matrix spectrastrike-preflight security-policy-gate security-regression redteam-validate spectrastrike-connect-check evidence-crypto-preflight demo-preflight-help bootstrap-local-integration demo-seed demo-reset local-federation-up local-federation-up-fast local-federation-prepare
 
 help:
 	@echo "VectorVue PostgreSQL operational targets"
@@ -98,7 +98,12 @@ help:
 	@echo "  make print-access-matrix - Print seeded global + client panel credential matrix"
 	@echo "  make pg-smoke   - Run PostgreSQL smoke tests"
 	@echo "  make venv-rebuild - Delete venv, recreate it, and install requirements"
-	@echo "  make run-tui    - Run interactive TUI in Docker (PostgreSQL backend)"
+	@echo "  make run-tui    - Run interactive TUI in Docker (full mode, rebuild images)"
+	@echo "  make run-tui-fast - Run interactive TUI in Docker (fast mode, no rebuild)"
+	@echo "  make run-tui-demo - Run assisted TUI demo in Docker (full mode, rebuild)"
+	@echo "  make run-tui-demo-fast - Run assisted TUI demo in Docker (fast mode)"
+	@echo "  make run-tui-demo-reset - Reset assisted TUI demo state in Docker (full mode)"
+	@echo "  make run-tui-demo-reset-fast - Reset assisted TUI demo state in Docker (fast mode)"
 	@echo "  make run-local-postgres - Run local Python TUI against Docker PostgreSQL"
 	@echo "  make wizard     - Interactive guided deploy/bootstrap wizard"
 	@echo "  make install    - Production install path (mandatory legal acceptance + deploy)"
@@ -140,7 +145,8 @@ help:
 	@echo "  make evidence-crypto-preflight - Validate required evidence encryption HSM env config"
 	@echo "  make demo-preflight-help - Print how to populate .env.demo-preflight.local"
 	@echo "  make bootstrap-local-integration - Create local integration deliverables + demo preflight env file"
-	@echo "  make local-federation-up - Bootstrap gitignored local federation env and start stack"
+	@echo "  make local-federation-up - Bootstrap gitignored local federation env and start stack (with rebuild)"
+	@echo "  make local-federation-up-fast - Bootstrap env and start stack without rebuilding images"
 	@echo "  make demo-seed - Seed ACME + Globex datasets for guided demo"
 	@echo "  make demo-reset - Reset VectorVue + SpectraStrike demo state to clean baseline"
 	@echo ""
@@ -291,8 +297,23 @@ venv-rebuild:
 	venv/bin/python -m pip install --upgrade pip
 	venv/bin/pip install -r requirements.txt
 
-run-tui: bootstrap-local-integration phase6-up
+run-tui: bootstrap-local-integration local-federation-up
 	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py
+
+run-tui-fast: bootstrap-local-integration local-federation-up-fast
+	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py
+
+run-tui-demo: bootstrap-local-integration local-federation-up
+	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo
+
+run-tui-demo-fast: bootstrap-local-integration local-federation-up-fast
+	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo
+
+run-tui-demo-reset: bootstrap-local-integration local-federation-up
+	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo-reset
+
+run-tui-demo-reset-fast: bootstrap-local-integration local-federation-up-fast
+	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo-reset
 
 run-local-postgres:
 	VV_DB_BACKEND=postgres \
@@ -585,7 +606,7 @@ bootstrap-local-integration:
 		> .env.demo-preflight.local; \
 	fi
 
-local-federation-up:
+local-federation-prepare:
 	@mkdir -p local_federation/certs
 	@if [ ! -f local_federation/.env.vectorvue.local ]; then \
 		printf '%s\n' \
@@ -615,9 +636,33 @@ local-federation-up:
 		"      - ./local_federation/.env.vectorvue.local" \
 		> local_federation/federation-compose.override.yml; \
 	fi
-	docker compose --env-file local_federation/.env.vectorvue.local -f docker-compose.yml -f local_federation/federation-compose.override.yml up -d postgres redis nats vectorvue_app vectorvue_portal vectorvue_telemetry_gateway nginx
+
+local-federation-up: local-federation-prepare
+	docker compose --env-file local_federation/.env.vectorvue.local -f docker-compose.yml -f local_federation/federation-compose.override.yml up -d --build postgres redis nats vectorvue_app vectorvue_portal vectorvue_telemetry_gateway nginx
 	@echo ""
 	@echo "Local federation is up."
+	@echo "VectorVue UI URLs:"
+	@echo "  - https://127.0.0.1"
+	@echo "If SpectraStrike stack is also running, open:"
+	@echo "  - https://127.0.0.1:18443"
+	@echo ""
+	@echo "Next steps (English):"
+	@echo "  1) Guided tour mode (pre-seeded): run 'make demo-seed' in VectorVue."
+	@echo "  2) Open VectorVue Analytics: https://127.0.0.1/portal/analytics"
+	@echo "  3) Open VectorVue Nexus: https://127.0.0.1/portal/nexus?demo=true&source=spectrastrike"
+	@echo "  4) Open Validation walkthrough: https://127.0.0.1/portal/validation?demo=true&source=nexus"
+	@echo "  5) To start from zero, run 'make demo-reset' in VectorVue."
+	@echo "  6) Open TUI consoles:"
+	@echo "     - VectorVue: make run-tui"
+	@echo "     - SpectraStrike: make -C ../SpectraStrike open-tui"
+	@echo "  7) Full guide docs:"
+	@echo "     - VectorVue/docs/FIRST_RUN_GUIDED_DEMO.md"
+	@echo "     - SpectraStrike/docs/FIRST_RUN_GUIDED_DEMO.md"
+
+local-federation-up-fast: local-federation-prepare
+	docker compose --env-file local_federation/.env.vectorvue.local -f docker-compose.yml -f local_federation/federation-compose.override.yml up -d postgres redis nats vectorvue_app vectorvue_portal vectorvue_telemetry_gateway nginx
+	@echo ""
+	@echo "Local federation is up (fast mode, no rebuild)."
 	@echo "VectorVue UI URLs:"
 	@echo "  - https://127.0.0.1"
 	@echo "If SpectraStrike stack is also running, open:"

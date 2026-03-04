@@ -25,7 +25,10 @@ import hashlib
 import json
 import logging
 import os
+import ssl
 import time
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -222,6 +225,33 @@ class ClientMLResponse(BaseModel):
     explanation: str
     model_version: str
     generated_at: str
+
+
+class BootstrapStatusResponse(BaseModel):
+    users: int
+    tenants: int
+    keys: int
+    wrapper_configured: int
+    federation_configured: int
+    ingest_requests: int
+    is_db_zero: bool
+    platform_onboarded: bool
+    federation_endpoint: str | None = None
+    federation_key_fingerprint: str | None = None
+    federation_connectivity_ok: bool = False
+    federation_signature_test_passed: bool = False
+
+
+class BootstrapSetupRequest(BaseModel):
+    workspace_name: str = Field(min_length=1, max_length=120)
+    wrappers: list[str] = Field(default_factory=list)
+    federation_endpoint: str = Field(min_length=3, max_length=256)
+
+
+class DemoSessionPayload(BaseModel):
+    source: str = Field(min_length=2, max_length=64)
+    step: str = Field(min_length=2, max_length=128)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 def _get_db() -> Session:
@@ -453,6 +483,120 @@ def _ensure_default_group(db: Session) -> int:
     return int(inserted["id"])
 
 
+def _table_exists(db: Session, name: str) -> bool:
+    row = db.execute(
+        text(
+            """SELECT EXISTS (
+                   SELECT 1
+                   FROM information_schema.tables
+                   WHERE table_schema='public' AND table_name=:name
+               )"""
+        ),
+        {"name": name},
+    ).scalar_one()
+    return bool(row)
+
+
+def _ensure_bootstrap_tables(db: Session) -> None:
+    db.execute(
+        text(
+            """CREATE TABLE IF NOT EXISTS vectorvue_bootstrap_state (
+                   tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+                   workspace_name TEXT NOT NULL,
+                   wrappers_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+                   federation_endpoint TEXT,
+                   federation_key_fingerprint TEXT,
+                   federation_connectivity_ok BOOLEAN NOT NULL DEFAULT FALSE,
+                   federation_signature_test_passed BOOLEAN NOT NULL DEFAULT FALSE,
+                   platform_onboarded BOOLEAN NOT NULL DEFAULT FALSE,
+                   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+               )"""
+        )
+    )
+    db.execute(
+        text(
+            """CREATE TABLE IF NOT EXISTS vectorvue_demo_session (
+                   tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+                   source TEXT NOT NULL,
+                   step TEXT NOT NULL,
+                   payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+               )"""
+        )
+    )
+    db.commit()
+
+
+def _federation_public_key_state() -> dict[str, Any]:
+    key_b64 = (
+        os.environ.get("VV_FEDERATION_SPECTRASTRIKE_ED25519_PUBKEY", "").strip()
+        or os.environ.get("VV_TG_SPECTRASTRIKE_ED25519_PUBKEY", "").strip()
+    )
+    if not key_b64:
+        return {"configured": False, "valid": False, "fingerprint": None}
+    try:
+        key_bytes = base64.b64decode(key_b64, validate=True)
+    except Exception:
+        return {"configured": True, "valid": False, "fingerprint": None}
+    if len(key_bytes) != 32:
+        return {"configured": True, "valid": False, "fingerprint": None}
+    fingerprint = hashlib.sha256(key_bytes).hexdigest()
+    return {"configured": True, "valid": True, "fingerprint": fingerprint}
+
+
+def _federation_endpoint_healthcheck(endpoint: str) -> bool:
+    base = endpoint.strip().rstrip("/")
+    if not base:
+        return False
+    health_url = f"{base}/healthz"
+    timeout_seconds = float(os.environ.get("VV_FEDERATION_HEALTHCHECK_TIMEOUT", "3.0"))
+    skip_tls_verify = os.environ.get("VV_FEDERATION_SKIP_TLS_VERIFY", "0").strip() == "1"
+    context = None
+    if skip_tls_verify:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request(health_url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_seconds, context=context) as resp:
+            return 200 <= int(getattr(resp, "status", 0)) < 400
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return False
+
+
+def _count_tenant_users(db: Session, tenant_id: str) -> int:
+    if _table_exists(db, "user_tenant_access"):
+        try:
+            count = db.execute(
+                text(
+                    """SELECT COUNT(*)
+                       FROM user_tenant_access
+                       WHERE tenant_id=CAST(:tenant_id AS UUID)
+                         AND active=TRUE"""
+                ),
+                {"tenant_id": tenant_id},
+            ).scalar_one()
+            return int(count)
+        except Exception:
+            pass
+    return int(db.execute(text("SELECT COUNT(*) FROM users")).scalar_one())
+
+
+def _count_ingest_requests(db: Session, tenant_id: str) -> int:
+    if not _table_exists(db, "spectrastrike_ingest_requests"):
+        return 0
+    return int(
+        db.execute(
+            text(
+                """SELECT COUNT(*)
+                   FROM spectrastrike_ingest_requests
+                   WHERE tenant_id=CAST(:tenant_id AS UUID)"""
+            ),
+            {"tenant_id": tenant_id},
+        ).scalar_one()
+    )
+
+
 @app.get("/api/v1/client/legal/documents", response_model=LegalDocumentsResponse, tags=["client-legal"])
 def legal_documents(mode: str = Query(default="self-hosted")):
     bundle = _current_legal_for_mode(mode)
@@ -680,6 +824,236 @@ def client_login(payload: ClientAuthLoginRequest, db: Session = Depends(_get_db)
         tenant_id=tenant_id,
         username=str(row["username"]),
     )
+
+
+@app.get("/api/v1/client/bootstrap/status", response_model=BootstrapStatusResponse, tags=["client-bootstrap"])
+def bootstrap_status(request: Request, db: Session = Depends(_get_db)):
+    tenant_id = str(get_current_tenant(request))
+    _ensure_bootstrap_tables(db)
+    tenants = _load_table("tenants")
+    tenant_count = int(
+        db.execute(
+            select(text("COUNT(*)"))
+            .select_from(tenants)
+            .where(and_(tenants.c.id == tenant_id, tenants.c.active.is_(True)))
+        ).scalar_one()
+    )
+    users_count = _count_tenant_users(db, tenant_id)
+    ingest_count = _count_ingest_requests(db, tenant_id)
+    key_state = _federation_public_key_state()
+    row = db.execute(
+        text(
+            """SELECT workspace_name, wrappers_json, federation_endpoint,
+                      federation_key_fingerprint, federation_connectivity_ok,
+                      federation_signature_test_passed, platform_onboarded
+               FROM vectorvue_bootstrap_state
+               WHERE tenant_id=CAST(:tenant_id AS UUID)"""
+        ),
+        {"tenant_id": tenant_id},
+    ).mappings().first()
+    wrappers = list(row["wrappers_json"]) if row and isinstance(row.get("wrappers_json"), list) else []
+    federation_configured = 1 if row and row.get("federation_endpoint") else 0
+    keys_count = 1 if key_state["valid"] else 0
+    wrapper_count = len(wrappers)
+    platform_onboarded = bool(row.get("platform_onboarded")) if row else False
+    is_db_zero = (
+        users_count == 0
+        and tenant_count == 0
+        and keys_count == 0
+        and wrapper_count == 0
+        and federation_configured == 0
+    )
+    return BootstrapStatusResponse(
+        users=users_count,
+        tenants=tenant_count,
+        keys=keys_count,
+        wrapper_configured=wrapper_count,
+        federation_configured=federation_configured,
+        ingest_requests=ingest_count,
+        is_db_zero=is_db_zero,
+        platform_onboarded=platform_onboarded,
+        federation_endpoint=str(row.get("federation_endpoint")) if row and row.get("federation_endpoint") else None,
+        federation_key_fingerprint=str(row.get("federation_key_fingerprint")) if row and row.get("federation_key_fingerprint") else key_state["fingerprint"],
+        federation_connectivity_ok=bool(row.get("federation_connectivity_ok")) if row else False,
+        federation_signature_test_passed=bool(row.get("federation_signature_test_passed")) if row else False,
+    )
+
+
+@app.post("/api/v1/client/bootstrap/setup", tags=["client-bootstrap"])
+def bootstrap_setup(payload: BootstrapSetupRequest, request: Request, db: Session = Depends(_get_db)):
+    tenant_id = str(get_current_tenant(request))
+    _ensure_bootstrap_tables(db)
+    key_state = _federation_public_key_state()
+    connectivity_ok = _federation_endpoint_healthcheck(payload.federation_endpoint)
+    signature_test_passed = bool(key_state["valid"]) and connectivity_ok
+    wrappers = [str(item).strip() for item in payload.wrappers if str(item).strip()]
+    db.execute(
+        text(
+            """INSERT INTO vectorvue_bootstrap_state
+               (tenant_id, workspace_name, wrappers_json, federation_endpoint,
+                federation_key_fingerprint, federation_connectivity_ok,
+                federation_signature_test_passed, platform_onboarded, updated_at)
+               VALUES (
+                 CAST(:tenant_id AS UUID), :workspace_name, CAST(:wrappers_json AS JSONB),
+                 :federation_endpoint, :federation_key_fingerprint,
+                 :federation_connectivity_ok, :federation_signature_test_passed,
+                 :platform_onboarded, NOW()
+               )
+               ON CONFLICT (tenant_id) DO UPDATE SET
+                 workspace_name=EXCLUDED.workspace_name,
+                 wrappers_json=EXCLUDED.wrappers_json,
+                 federation_endpoint=EXCLUDED.federation_endpoint,
+                 federation_key_fingerprint=EXCLUDED.federation_key_fingerprint,
+                 federation_connectivity_ok=EXCLUDED.federation_connectivity_ok,
+                 federation_signature_test_passed=EXCLUDED.federation_signature_test_passed,
+                 platform_onboarded=EXCLUDED.platform_onboarded,
+                 updated_at=NOW()"""
+        ),
+        {
+            "tenant_id": tenant_id,
+            "workspace_name": payload.workspace_name.strip(),
+            "wrappers_json": json.dumps(wrappers),
+            "federation_endpoint": payload.federation_endpoint.strip(),
+            "federation_key_fingerprint": key_state["fingerprint"],
+            "federation_connectivity_ok": connectivity_ok,
+            "federation_signature_test_passed": signature_test_passed,
+            "platform_onboarded": signature_test_passed,
+        },
+    )
+    db.commit()
+    return {
+        "configured": True,
+        "tenant_id": tenant_id,
+        "workspace_name": payload.workspace_name.strip(),
+        "wrappers": wrappers,
+        "federation_endpoint": payload.federation_endpoint.strip(),
+        "federation_connectivity_ok": connectivity_ok,
+        "federation_key_configured": bool(key_state["configured"]),
+        "federation_key_valid": bool(key_state["valid"]),
+        "federation_key_fingerprint": key_state["fingerprint"],
+        "federation_signature_test_passed": signature_test_passed,
+    }
+
+
+@app.post("/api/v1/client/bootstrap/reset", tags=["client-bootstrap"])
+def bootstrap_reset(
+    request: Request,
+    purge_federation_ingest: bool = Query(default=False),
+    db: Session = Depends(_get_db),
+):
+    tenant_id = str(get_current_tenant(request))
+    _ensure_bootstrap_tables(db)
+    deleted = db.execute(
+        text("DELETE FROM vectorvue_bootstrap_state WHERE tenant_id=CAST(:tenant_id AS UUID)"),
+        {"tenant_id": tenant_id},
+    ).rowcount
+    db.execute(
+        text("DELETE FROM vectorvue_demo_session WHERE tenant_id=CAST(:tenant_id AS UUID)"),
+        {"tenant_id": tenant_id},
+    )
+    purge_counts = {"requests": 0, "events": 0, "findings": 0}
+    if purge_federation_ingest:
+        if _table_exists(db, "spectrastrike_events"):
+            purge_counts["events"] = int(
+                db.execute(
+                    text("DELETE FROM spectrastrike_events WHERE tenant_id=CAST(:tenant_id AS UUID)"),
+                    {"tenant_id": tenant_id},
+                ).rowcount
+            )
+        if _table_exists(db, "spectrastrike_findings"):
+            purge_counts["findings"] = int(
+                db.execute(
+                    text("DELETE FROM spectrastrike_findings WHERE tenant_id=CAST(:tenant_id AS UUID)"),
+                    {"tenant_id": tenant_id},
+                ).rowcount
+            )
+        if _table_exists(db, "spectrastrike_ingest_requests"):
+            purge_counts["requests"] = int(
+                db.execute(
+                    text("DELETE FROM spectrastrike_ingest_requests WHERE tenant_id=CAST(:tenant_id AS UUID)"),
+                    {"tenant_id": tenant_id},
+                ).rowcount
+            )
+    db.commit()
+    return {
+        "reset": True,
+        "tenant_id": tenant_id,
+        "deleted_bootstrap_rows": int(deleted or 0),
+        "purged_federation_ingest": purge_counts,
+    }
+
+
+@app.get("/api/v1/client/demo/session", tags=["client-bootstrap"])
+def get_demo_session(request: Request, db: Session = Depends(_get_db)):
+    tenant_id = str(get_current_tenant(request))
+    _ensure_bootstrap_tables(db)
+    row = db.execute(
+        text(
+            """SELECT source, step, payload_json, updated_at
+               FROM vectorvue_demo_session
+               WHERE tenant_id=CAST(:tenant_id AS UUID)"""
+        ),
+        {"tenant_id": tenant_id},
+    ).mappings().first()
+    if not row:
+        return {
+            "tenant_id": tenant_id,
+            "source": "vectorvue",
+            "step": "welcome",
+            "payload": {},
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+    return {
+        "tenant_id": tenant_id,
+        "source": str(row.get("source") or "vectorvue"),
+        "step": str(row.get("step") or "welcome"),
+        "payload": row.get("payload_json") if isinstance(row.get("payload_json"), dict) else {},
+        "updated_at": str(row.get("updated_at") or datetime.utcnow().isoformat() + "Z"),
+    }
+
+
+@app.put("/api/v1/client/demo/session", tags=["client-bootstrap"])
+def put_demo_session(payload: DemoSessionPayload, request: Request, db: Session = Depends(_get_db)):
+    tenant_id = str(get_current_tenant(request))
+    _ensure_bootstrap_tables(db)
+    db.execute(
+        text(
+            """INSERT INTO vectorvue_demo_session (tenant_id, source, step, payload_json, updated_at)
+               VALUES (CAST(:tenant_id AS UUID), :source, :step, CAST(:payload_json AS JSONB), NOW())
+               ON CONFLICT (tenant_id) DO UPDATE SET
+                 source=EXCLUDED.source,
+                 step=EXCLUDED.step,
+                 payload_json=EXCLUDED.payload_json,
+                 updated_at=NOW()"""
+        ),
+        {
+            "tenant_id": tenant_id,
+            "source": payload.source.strip(),
+            "step": payload.step.strip(),
+            "payload_json": json.dumps(payload.payload or {}),
+        },
+    )
+    db.commit()
+    return {
+        "saved": True,
+        "tenant_id": tenant_id,
+        "source": payload.source.strip(),
+        "step": payload.step.strip(),
+        "payload": payload.payload or {},
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.delete("/api/v1/client/demo/session", tags=["client-bootstrap"])
+def delete_demo_session(request: Request, db: Session = Depends(_get_db)):
+    tenant_id = str(get_current_tenant(request))
+    _ensure_bootstrap_tables(db)
+    count = db.execute(
+        text("DELETE FROM vectorvue_demo_session WHERE tenant_id=CAST(:tenant_id AS UUID)"),
+        {"tenant_id": tenant_id},
+    ).rowcount
+    db.commit()
+    return {"deleted": int(count or 0), "tenant_id": tenant_id}
 
 
 @app.get("/", tags=["system"])

@@ -92,8 +92,22 @@ Every telemetry record includes an `attestation_measurement_hash` describing mea
 
 - VectorVue receives guided demo transitions from SpectraStrike/Nexus via `?demo=true`.
 - Demo mode remains explicit and source-tagged (`source=nexus|spectrastrike`).
+- Demo state is synchronized using `nyxera_demo_session` across SpectraStrike UI, VectorVue TUI, and Tenant Portal.
 - Cross-app links are environment-driven (`VITE_SPECTRASTRIKE_URL`, `VITE_NEXUS_URL`, `VITE_VECTORVUE_URL`) with runtime warnings when unset.
 - Validation walkthrough route: `/portal/validation?demo=true&source=nexus`.
+
+## Assisted Demo Surfaces
+
+- TUI assisted demo: `python vv.py --demo`
+- TUI demo reset: `python vv.py --demo-reset`
+- Tenant Portal first-use guided demo launches when `vectorvue_onboarded` is missing.
+- Demo reset in portal also clears unified demo session key.
+
+## DB-Zero First Run
+
+- First-run onboarding must detect empty bootstrap surfaces before guided setup.
+- Setup wizard covers admin bootstrap, wrapper readiness, federation endpoint, and readiness confirmation.
+- Demo reset path returns platform to DB-zero-like onboarding state for reproducible walkthroughs.
 
 ## Telemetry Transparency
 

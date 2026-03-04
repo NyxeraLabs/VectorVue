@@ -25,14 +25,14 @@ export default function ValidationPage() {
   const params = useSearchParams();
   const demoActive = isDemoQuery(params.toString());
   const [step, setStep] = useState(
-    'intro' as
-      | 'intro'
-      | 'envelope_intake'
-      | 'signature_check'
-      | 'attestation_verification'
-      | 'measurement_hash'
-      | 'policy_validation'
-      | 'return_to_spectrastrike'
+    'welcome' as
+      | 'welcome'
+      | 'execution_list_intro'
+      | 'open_execution'
+      | 'signature_validation'
+      | 'attestation_review'
+      | 'policy_status'
+      | 'export_report'
       | 'complete'
   );
   const [envelope, setEnvelope] = useState(emptyEnvelope);
@@ -92,11 +92,26 @@ export default function ValidationPage() {
             <button
               type="button"
               className="rounded border border-[color:var(--vv-border-subtle)] px-3 py-2 text-sm hover:border-accent"
-              onClick={() => setStep((current) => nextVectorVueDemoStep(current))}
+              onClick={() =>
+                setStep((current) => {
+                  const next = nextVectorVueDemoStep(current);
+                  void fetch('/api/proxy/demo/session', {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      source: 'vectorvue-validation',
+                      step: next,
+                      payload: { route: 'portal/validation' }
+                    })
+                  });
+                  return next;
+                })
+              }
             >
               Next Demo Step
             </button>
-            {(step === 'return_to_spectrastrike' || step === 'complete') ? (
+            {(step === 'export_report' || step === 'complete') ? (
               <a href={returnUrl} className="rounded border border-[color:var(--vv-border-subtle)] px-3 py-2 text-sm hover:border-accent">
                 Return to SpectraStrike
               </a>
