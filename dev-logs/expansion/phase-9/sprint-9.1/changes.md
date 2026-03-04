@@ -27,3 +27,8 @@
 ## Reason for each change
 - Remove workflow failures from license-header gate without changing runtime behavior.
 - Improve startup ergonomics and resolve CI type-check failure on extension-based module imports.
+
+## Incremental Fix - TUI Demo State on Read-Only Home
+- Updated `app/demo_tui.py` demo state persistence to support writable fallback paths when `~/.vectorvue` is not writable.
+- Added `VECTORVUE_DEMO_STATE_PATH` override support.
+- Updated `vv.py --demo-reset` output to print the resolved persisted state path.

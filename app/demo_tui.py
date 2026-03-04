@@ -31,33 +31,64 @@ class DemoState:
 
 
 def demo_state_path() -> Path:
+    env_path = os.environ.get("VECTORVUE_DEMO_STATE_PATH", "").strip()
+    if env_path:
+        return Path(env_path).expanduser()
     return Path.home() / ".vectorvue" / "demo_state.json"
 
 
+def _demo_state_candidates(path: Path | None = None) -> list[Path]:
+    if path is not None:
+        return [path]
+    primary = demo_state_path()
+    candidates = [
+        primary,
+        Path.cwd() / ".vectorvue" / "demo_state.json",
+        Path("/tmp") / f"vectorvue-{os.getuid()}" / "demo_state.json",
+    ]
+    out: list[Path] = []
+    for candidate in candidates:
+        if candidate not in out:
+            out.append(candidate)
+    return out
+
+
 def load_demo_state(path: Path | None = None) -> DemoState:
-    resolved = path or demo_state_path()
-    if not resolved.exists():
-        return DemoState()
-    try:
-        payload = json.loads(resolved.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return DemoState()
-    step = str(payload.get("step", "welcome"))
-    if step not in DEMO_STEPS:
-        step = "welcome"
-    return DemoState(step=step, completed=bool(payload.get("completed", False)))
+    for resolved in _demo_state_candidates(path):
+        if not resolved.exists():
+            continue
+        try:
+            payload = json.loads(resolved.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        step = str(payload.get("step", "welcome"))
+        if step not in DEMO_STEPS:
+            step = "welcome"
+        return DemoState(step=step, completed=bool(payload.get("completed", False)))
+    return DemoState()
 
 
-def save_demo_state(state: DemoState, path: Path | None = None) -> None:
-    resolved = path or demo_state_path()
-    resolved.parent.mkdir(parents=True, exist_ok=True)
-    resolved.write_text(json.dumps({"step": state.step, "completed": state.completed}, indent=2), encoding="utf-8")
+def save_demo_state(state: DemoState, path: Path | None = None) -> Path:
+    payload = json.dumps({"step": state.step, "completed": state.completed}, indent=2)
+    last_error: Exception | None = None
+    for resolved in _demo_state_candidates(path):
+        try:
+            resolved.parent.mkdir(parents=True, exist_ok=True)
+            resolved.write_text(payload, encoding="utf-8")
+            return resolved
+        except OSError as exc:
+            last_error = exc
+            continue
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("unable to persist VectorVue demo state")
 
 
-def reset_demo_state(path: Path | None = None) -> None:
+def reset_demo_state(path: Path | None = None) -> Path:
     state = DemoState()
-    save_demo_state(state, path=path)
+    resolved = save_demo_state(state, path=path)
     _sync_demo_session(state.step)
+    return resolved
 
 
 def _db_url() -> str:

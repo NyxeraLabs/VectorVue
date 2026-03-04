@@ -4863,8 +4863,8 @@ def _parse_cli_args() -> argparse.Namespace:
 if __name__ == '__main__':
     args = _parse_cli_args()
     if args.demo_reset:
-        reset_demo_state()
-        print("VectorVue demo state reset: ~/.vectorvue/demo_state.json")
+        resolved = reset_demo_state()
+        print(f"VectorVue demo state reset: {resolved}")
         raise SystemExit(0)
     if args.demo:
         run_assisted_demo()
