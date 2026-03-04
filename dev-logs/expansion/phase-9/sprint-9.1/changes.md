@@ -32,3 +32,7 @@
 - Updated `app/demo_tui.py` demo state persistence to support writable fallback paths when `~/.vectorvue` is not writable.
 - Added `VECTORVUE_DEMO_STATE_PATH` override support.
 - Updated `vv.py --demo-reset` output to print the resolved persisted state path.
+- Updated `Makefile` `run-tui-demo*` targets to set:
+  - `HOME=/tmp/vectorvue`
+  - `VECTORVUE_DEMO_STATE_PATH=/tmp/vectorvue/demo_state.json`
+  This prevents read-only home failures even when running older images.

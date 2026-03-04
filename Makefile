@@ -304,16 +304,16 @@ run-tui-fast: bootstrap-local-integration local-federation-up-fast
 	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py
 
 run-tui-demo: bootstrap-local-integration local-federation-up
-	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo
+	$(DC) run --rm -it -e VV_RUN_MODE=tui -e HOME=/tmp/vectorvue -e VECTORVUE_DEMO_STATE_PATH=/tmp/vectorvue/demo_state.json vectorvue_app python vv.py --demo
 
 run-tui-demo-fast: bootstrap-local-integration local-federation-up-fast
-	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo
+	$(DC) run --rm -it -e VV_RUN_MODE=tui -e HOME=/tmp/vectorvue -e VECTORVUE_DEMO_STATE_PATH=/tmp/vectorvue/demo_state.json vectorvue_app python vv.py --demo
 
 run-tui-demo-reset: bootstrap-local-integration local-federation-up
-	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo-reset
+	$(DC) run --rm -it -e VV_RUN_MODE=tui -e HOME=/tmp/vectorvue -e VECTORVUE_DEMO_STATE_PATH=/tmp/vectorvue/demo_state.json vectorvue_app python vv.py --demo-reset
 
 run-tui-demo-reset-fast: bootstrap-local-integration local-federation-up-fast
-	$(DC) run --rm -it -e VV_RUN_MODE=tui vectorvue_app python vv.py --demo-reset
+	$(DC) run --rm -it -e VV_RUN_MODE=tui -e HOME=/tmp/vectorvue -e VECTORVUE_DEMO_STATE_PATH=/tmp/vectorvue/demo_state.json vectorvue_app python vv.py --demo-reset
 
 run-local-postgres:
 	VV_DB_BACKEND=postgres \
