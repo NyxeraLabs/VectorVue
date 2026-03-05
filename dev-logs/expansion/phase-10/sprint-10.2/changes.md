@@ -18,3 +18,11 @@ Critical cross-platform seed parity fix so VectorVue TUI + tenant portal consume
 
 ## Outcome
 VectorVue runtime surfaces real seeded federation records aligned with SpectraStrike seed output.
+
+## 2026-03-05 Addendum
+- Enhanced `seed_spectrastrike_federation_data` to mirror seeded SpectraStrike events into client-facing `findings` records.
+- Event-backed findings now include canonical campaign tags from federation metadata (`[campaign:OP_*_2026]`).
+- Result in latest run:
+  - `spectrastrike_events`: 12 per tenant
+  - `spectrastrike_findings`: 12 per tenant
+  - Client findings now include telemetry-event entries with matching campaign IDs.

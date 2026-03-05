@@ -33,8 +33,8 @@ function severityFromCvss(score?: number | null): SeverityFilter {
 }
 
 function campaignLabel(title: string): string {
-  const m = title.match(/\[campaign:(\d+)\]/i);
-  return m ? `Campaign ${m[1]}` : 'Campaign N/A';
+  const m = title.match(/\[campaign:([^\]]+)\]/i);
+  return m ? m[1].trim() : 'Campaign N/A';
 }
 
 function toCsv(items: ClientFinding[]): string {

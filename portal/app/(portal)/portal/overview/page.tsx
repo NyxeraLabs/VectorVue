@@ -61,8 +61,8 @@ function severityFromCvss(score?: number | null): 'critical' | 'high' | 'medium'
 }
 
 function campaignLabel(text: string): string {
-  const m = text.match(/\[campaign:(\d+)\]/i);
-  return m ? `Campaign ${m[1]}` : 'Campaign N/A';
+  const m = text.match(/\[campaign:([^\]]+)\]/i);
+  return m ? m[1].trim() : 'Campaign N/A';
 }
 
 function normalizeStatus(status?: string | null): 'open' | 'in_progress' | 'completed' | 'blocked' | 'other' {

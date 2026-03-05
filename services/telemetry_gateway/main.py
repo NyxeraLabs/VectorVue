@@ -39,6 +39,8 @@ from fastapi import FastAPI, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from redis import Redis
 from redis.exceptions import RedisError
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from services.federation.schemas import SignedEvidenceBundle
 from services.federation.verifier import federation_bundle_hash, verify_proof_of_origin
 from security.tamper_log import get_tamper_audit_log
@@ -201,6 +203,191 @@ class MemoryRateLimiter:
 _rate_limiter = MemoryRateLimiter()
 _graph_store_lock = Lock()
 _execution_graph_store: dict[str, list[ExecutionGraphMetadataRequest]] = {}
+_persistence_engine = None
+
+
+def _persistence_db_url() -> str:
+    env_url = os.environ.get("VV_DB_URL", "").strip()
+    if env_url:
+        url = make_url(env_url)
+        if url.get_backend_name() == "postgresql" and url.drivername != "postgresql+psycopg":
+            url = url.set(drivername="postgresql+psycopg")
+        return url.render_as_string(hide_password=False)
+    user = os.environ.get("VV_DB_USER", os.environ.get("POSTGRES_USER", "vectorvue"))
+    password = os.environ.get("VV_DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "strongpassword"))
+    host = os.environ.get("VV_DB_HOST", "postgres")
+    port = os.environ.get("VV_DB_PORT", "5432")
+    name = os.environ.get("VV_DB_NAME", os.environ.get("POSTGRES_DB", "vectorvue_db"))
+    return make_url(f"postgresql+psycopg://{user}:{password}@{host}:{port}/{name}").render_as_string(
+        hide_password=False
+    )
+
+
+def _get_persistence_engine():
+    global _persistence_engine
+    if _persistence_engine is None:
+        _persistence_engine = create_engine(_persistence_db_url(), future=True, pool_pre_ping=True)
+    return _persistence_engine
+
+
+def _persist_federated_ingest(
+    *,
+    request_id: str,
+    parsed: TelemetryIngestRequest,
+    canonical_payload,
+) -> None:
+    engine = _get_persistence_engine()
+    metadata_json = dict(canonical_payload.attributes or {})
+    metadata_json.setdefault("campaign_id", parsed.campaign_id)
+    metadata_json.setdefault("execution_hash", parsed.execution_hash)
+    metadata_json.setdefault("source", "federation_api_ingest")
+    severity = str(canonical_payload.severity).lower()
+    occurred_at = canonical_payload.observed_at.isoformat()
+    event_uid = str(canonical_payload.event_id)
+    message = str(canonical_payload.description or f"Telemetry event {canonical_payload.event_type}")
+
+    is_finding = severity in {"high", "critical"} or "FAIL" in str(canonical_payload.event_type).upper()
+    finding_uid = f"fnd-{event_uid}"
+    finding_title = f"Telemetry finding: {canonical_payload.event_type} [campaign:{parsed.campaign_id}]"
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """CREATE TABLE IF NOT EXISTS spectrastrike_ingest_requests (
+                       request_id UUID PRIMARY KEY,
+                       tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                       endpoint TEXT NOT NULL,
+                       status TEXT NOT NULL,
+                       total_items INTEGER NOT NULL DEFAULT 0,
+                       accepted_items INTEGER NOT NULL DEFAULT 0,
+                       failed_items INTEGER NOT NULL DEFAULT 0,
+                       failed_references JSONB NOT NULL DEFAULT '[]'::jsonb,
+                       idempotency_key TEXT,
+                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                   )"""
+            )
+        )
+        conn.execute(
+            text(
+                """CREATE TABLE IF NOT EXISTS spectrastrike_events (
+                       id BIGSERIAL PRIMARY KEY,
+                       tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                       request_id UUID NOT NULL,
+                       event_uid TEXT NOT NULL,
+                       source_system TEXT NOT NULL,
+                       event_type TEXT NOT NULL,
+                       occurred_at TIMESTAMPTZ NOT NULL,
+                       severity TEXT NOT NULL,
+                       asset_ref TEXT NOT NULL,
+                       message TEXT NOT NULL,
+                       metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                       raw_payload JSONB NOT NULL,
+                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                       UNIQUE (tenant_id, event_uid)
+                   )"""
+            )
+        )
+        conn.execute(
+            text(
+                """CREATE TABLE IF NOT EXISTS spectrastrike_findings (
+                       id BIGSERIAL PRIMARY KEY,
+                       tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT,
+                       request_id UUID NOT NULL,
+                       finding_uid TEXT NOT NULL,
+                       title TEXT NOT NULL,
+                       description TEXT NOT NULL,
+                       severity TEXT NOT NULL,
+                       status TEXT NOT NULL,
+                       first_seen TIMESTAMPTZ NOT NULL,
+                       last_seen TIMESTAMPTZ,
+                       asset_ref TEXT,
+                       recommendation TEXT,
+                       metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                       raw_payload JSONB NOT NULL,
+                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                       UNIQUE (tenant_id, finding_uid)
+                   )"""
+            )
+        )
+        conn.execute(
+            text(
+                """INSERT INTO spectrastrike_ingest_requests
+                   (request_id, tenant_id, endpoint, status, total_items, accepted_items, failed_items, failed_references, idempotency_key, created_at, updated_at)
+                   VALUES (CAST(:request_id AS UUID), CAST(:tenant_id AS UUID), '/internal/v1/telemetry', 'accepted', 1, 1, 0, '[]'::jsonb, :idempotency_key, NOW(), NOW())
+                   ON CONFLICT (request_id) DO UPDATE SET
+                     status='accepted',
+                     total_items=EXCLUDED.total_items,
+                     accepted_items=EXCLUDED.accepted_items,
+                     updated_at=NOW()"""
+            ),
+            {
+                "request_id": request_id,
+                "tenant_id": parsed.tenant_id,
+                "idempotency_key": parsed.execution_hash,
+            },
+        )
+        conn.execute(
+            text(
+                """INSERT INTO spectrastrike_events
+                   (tenant_id, request_id, event_uid, source_system, event_type, occurred_at, severity, asset_ref, message, metadata_json, raw_payload)
+                   VALUES (CAST(:tenant_id AS UUID), CAST(:request_id AS UUID), :event_uid, :source_system, :event_type, CAST(:occurred_at AS TIMESTAMPTZ), :severity, :asset_ref, :message, CAST(:metadata_json AS JSONB), CAST(:raw_payload AS JSONB))
+                   ON CONFLICT (tenant_id, event_uid) DO UPDATE SET
+                     request_id=EXCLUDED.request_id,
+                     severity=EXCLUDED.severity,
+                     message=EXCLUDED.message,
+                     metadata_json=EXCLUDED.metadata_json,
+                     raw_payload=EXCLUDED.raw_payload"""
+            ),
+            {
+                "tenant_id": parsed.tenant_id,
+                "request_id": request_id,
+                "event_uid": event_uid,
+                "source_system": str(canonical_payload.source_system),
+                "event_type": str(canonical_payload.event_type),
+                "occurred_at": occurred_at,
+                "severity": severity,
+                "asset_ref": str(canonical_payload.attributes.get("asset_ref", "unknown")),
+                "message": message,
+                "metadata_json": json.dumps(metadata_json),
+                "raw_payload": json.dumps(
+                    {
+                        "request": parsed.model_dump(mode="json"),
+                        "canonical_payload": canonical_payload.model_dump(mode="json"),
+                    }
+                ),
+            },
+        )
+        if is_finding:
+            conn.execute(
+                text(
+                    """INSERT INTO spectrastrike_findings
+                       (tenant_id, request_id, finding_uid, title, description, severity, status, first_seen, last_seen, asset_ref, recommendation, metadata_json, raw_payload)
+                       VALUES (CAST(:tenant_id AS UUID), CAST(:request_id AS UUID), :finding_uid, :title, :description, :severity, :status, CAST(:first_seen AS TIMESTAMPTZ), CAST(:last_seen AS TIMESTAMPTZ), :asset_ref, :recommendation, CAST(:metadata_json AS JSONB), CAST(:raw_payload AS JSONB))
+                       ON CONFLICT (tenant_id, finding_uid) DO UPDATE SET
+                         title=EXCLUDED.title,
+                         description=EXCLUDED.description,
+                         severity=EXCLUDED.severity,
+                         status=EXCLUDED.status,
+                         last_seen=EXCLUDED.last_seen,
+                         metadata_json=EXCLUDED.metadata_json"""
+                ),
+                {
+                    "tenant_id": parsed.tenant_id,
+                    "request_id": request_id,
+                    "finding_uid": finding_uid,
+                    "title": finding_title,
+                    "description": message,
+                    "severity": severity,
+                    "status": "open" if severity in {"critical", "high"} else "triaged",
+                    "first_seen": occurred_at,
+                    "last_seen": occurred_at,
+                    "asset_ref": str(canonical_payload.attributes.get("asset_ref", "unknown")),
+                    "recommendation": "Review SpectraStrike execution telemetry and validate policy controls.",
+                    "metadata_json": json.dumps(metadata_json),
+                    "raw_payload": json.dumps(canonical_payload.model_dump(mode="json")),
+                },
+            )
 
 
 def _get_redis_client(settings: GatewaySettings) -> Redis:
@@ -790,6 +977,14 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
             )
         except Exception as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Telemetry queue publish failed") from exc
+        try:
+            _persist_federated_ingest(
+                request_id=request_id,
+                parsed=parsed,
+                canonical_payload=canonical_payload,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Telemetry persistence failed") from exc
 
         audit_log.append_event(
             event_type="telemetry.accepted",

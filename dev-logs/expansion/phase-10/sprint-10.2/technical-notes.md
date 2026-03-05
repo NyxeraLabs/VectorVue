@@ -8,3 +8,6 @@
   - associated finding summaries.
 - TUI fallback behavior:
   - if no federation rows exist, assisted demo still runs with explicit empty-context messaging.
+- New parity behavior:
+  - Every imported SpectraStrike seeded event can materialize as a tenant-scoped client finding with deterministic evidence hash.
+  - Campaign tag extraction uses `metadata_json.campaign_id` to preserve cross-platform campaign naming.

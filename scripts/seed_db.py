@@ -519,6 +519,7 @@ def seed_spectrastrike_federation_data(
     request_totals: dict[str, int] = {}
     inserted_events = 0
     inserted_findings = 0
+    user_id = db.current_user.id if db.current_user else None
 
     for ev in events:
         if not isinstance(ev, dict):
@@ -551,6 +552,49 @@ def seed_spectrastrike_federation_data(
         )
         inserted_events += int(c.rowcount or 0)
 
+        campaign_id = ""
+        if isinstance(metadata_json, dict):
+            campaign_id = str(metadata_json.get("campaign_id", "")).strip()
+        campaign_tag = campaign_id or "unknown"
+        event_type = str(ev.get("event_type", "task.queued")).strip() or "task.queued"
+        source_system = str(ev.get("source_system", "spectrastrike")).strip() or "spectrastrike"
+        client_title = (
+            f"Telemetry event: {event_type} [{event_uid}] [campaign:{campaign_tag}]"
+        )
+        c.execute("SELECT id FROM findings WHERE tenant_id=? AND title=?", (tenant_id, client_title))
+        if not c.fetchone():
+            severity = str(ev.get("severity", "medium")).lower()
+            cvss = 9.1 if severity == "critical" else 8.1 if severity == "high" else 6.8 if severity == "medium" else 4.0
+            c.execute(
+                """INSERT INTO findings
+                   (title, description, cvss_score, mitre_id, status, evidence, remediation, project_id,
+                    cvss_vector, evidence_hash, created_by, last_modified_by, assigned_to, visibility,
+                    tags, approval_status, approved_by, approval_timestamp, tenant_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    client_title,
+                    f"{str(ev.get('message', 'Federated telemetry event imported from SpectraStrike.'))} "
+                    f"(asset={str(ev.get('asset_ref', 'unknown'))}, source={source_system})",
+                    cvss,
+                    "T1021",
+                    "Open",
+                    "Federated telemetry event imported from SpectraStrike.",
+                    "Review event lineage, linked envelope verification, and run remediation workflow.",
+                    "DEFAULT",
+                    "",
+                    hashlib.sha256(f"{tenant_id}:{event_uid}:{campaign_tag}".encode()).hexdigest(),
+                    user_id,
+                    user_id,
+                    user_id,
+                    "global",
+                    "seed,client,telemetry,federation,event",
+                    "approved",
+                    user_id,
+                    str(ev.get("occurred_at", datetime.utcnow().isoformat() + "Z")),
+                    tenant_id,
+                ),
+            )
+
     for fnd in findings:
         if not isinstance(fnd, dict):
             continue
@@ -582,6 +626,44 @@ def seed_spectrastrike_federation_data(
             ),
         )
         inserted_findings += int(c.rowcount or 0)
+
+        campaign_id = ""
+        if isinstance(metadata_json, dict):
+            campaign_id = str(metadata_json.get("campaign_id", "")).strip()
+        campaign_tag = campaign_id or "unknown"
+        client_title = f"{str(fnd.get('title', 'Telemetry finding'))} [campaign:{campaign_tag}]"
+        c.execute("SELECT id FROM findings WHERE tenant_id=? AND title=?", (tenant_id, client_title))
+        if not c.fetchone():
+            severity = str(fnd.get("severity", "medium")).lower()
+            cvss = 9.1 if severity == "critical" else 8.1 if severity == "high" else 6.8 if severity == "medium" else 4.0
+            c.execute(
+                """INSERT INTO findings
+                   (title, description, cvss_score, mitre_id, status, evidence, remediation, project_id,
+                    cvss_vector, evidence_hash, created_by, last_modified_by, assigned_to, visibility,
+                    tags, approval_status, approved_by, approval_timestamp, tenant_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    client_title,
+                    str(fnd.get("description", "Federated telemetry finding imported from SpectraStrike.")),
+                    cvss,
+                    "T1021",
+                    "Open",
+                    "Federated telemetry evidence imported from SpectraStrike.",
+                    str(fnd.get("recommendation", "Review telemetry and containment controls.")),
+                    "DEFAULT",
+                    "",
+                    hashlib.sha256(f"{tenant_id}:{client_title}".encode()).hexdigest(),
+                    user_id,
+                    user_id,
+                    user_id,
+                    "global",
+                    "seed,client,telemetry,federation",
+                    "approved",
+                    user_id,
+                    str(fnd.get("first_seen", datetime.utcnow().isoformat() + "Z")),
+                    tenant_id,
+                ),
+            )
 
     now = datetime.utcnow().isoformat() + "Z"
     for request_id, total in request_totals.items():
@@ -628,6 +710,25 @@ def seed_client_portal_data(
     seeded_finding_ids: list[int] = []
     seeded_report_ids: list[int] = []
     seeded_remediation_ids: list[int] = []
+    campaign_name_by_id: dict[int, str] = {}
+    for campaign_id in campaign_ids:
+        c.execute("SELECT name FROM campaigns WHERE id=?", (campaign_id,))
+        row = c.fetchone()
+        campaign_name_by_id[int(campaign_id)] = str(row["name"]) if row and row.get("name") else f"campaign-{campaign_id}"
+    for campaign_id, campaign_name in campaign_name_by_id.items():
+        c.execute(
+            """UPDATE findings
+               SET title = regexp_replace(
+                 title,
+                 '\\[campaign:' || ? || '\\]',
+                 '[campaign:' || ? || ']',
+                 'g'
+               )
+               WHERE tenant_id=?
+                 AND POSITION('[campaign:' || ? || ']' IN title) > 0
+                 AND POSITION('seed,client,portal' IN COALESCE(tags, '')) > 0""",
+            (str(campaign_id), campaign_name, tenant_id, str(campaign_id)),
+        )
 
     shared_templates = [
         ("Weak AD Password Policy", 8.4, "T1110", "Password spraying exposed weak domain accounts."),
@@ -680,7 +781,8 @@ def seed_client_portal_data(
         templates = profile_templates + shared_templates
         finding_ids: list[int] = []
         for idx, (title, cvss, mitre, desc) in enumerate(templates, start=1):
-            scoped_title = f"{title} [campaign:{camp}]"
+            campaign_tag = campaign_name_by_id.get(int(camp), f"campaign-{camp}")
+            scoped_title = f"{title} [campaign:{campaign_tag}]"
             c.execute("SELECT id FROM findings WHERE title=? AND tenant_id=?", (scoped_title, tenant_id))
             row = c.fetchone()
             if row:
