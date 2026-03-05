@@ -26,3 +26,7 @@ VectorVue runtime surfaces real seeded federation records aligned with SpectraSt
   - `spectrastrike_events`: 12 per tenant
   - `spectrastrike_findings`: 12 per tenant
   - Client findings now include telemetry-event entries with matching campaign IDs.
+- Remediation tracker accuracy upgrade:
+  - seeded federated events/findings now generate campaign-tagged remediation tasks (`Contain and validate...` / `Investigate and remediate...`) linked to imported findings.
+- Local federation DNS support:
+  - `local_federation/federation-compose.override.yml` adds `vectorvue.local` alias on nginx service network for secure cross-stack sync.

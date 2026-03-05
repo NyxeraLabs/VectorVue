@@ -11,3 +11,6 @@
 - New parity behavior:
   - Every imported SpectraStrike seeded event can materialize as a tenant-scoped client finding with deterministic evidence hash.
   - Campaign tag extraction uses `metadata_json.campaign_id` to preserve cross-platform campaign naming.
+- Remediation seeding behavior:
+  - Federation event findings create `remediation_tasks` with status derived from severity (`open` for high/critical, otherwise `in_progress`).
+  - Federation findings also create campaign-tagged remediation tasks linked to corresponding imported finding IDs.

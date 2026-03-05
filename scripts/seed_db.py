@@ -562,7 +562,10 @@ def seed_spectrastrike_federation_data(
             f"Telemetry event: {event_type} [{event_uid}] [campaign:{campaign_tag}]"
         )
         c.execute("SELECT id FROM findings WHERE tenant_id=? AND title=?", (tenant_id, client_title))
-        if not c.fetchone():
+        row = c.fetchone()
+        if row:
+            finding_id = int(row["id"])
+        else:
             severity = str(ev.get("severity", "medium")).lower()
             cvss = 9.1 if severity == "critical" else 8.1 if severity == "high" else 6.8 if severity == "medium" else 4.0
             c.execute(
@@ -590,6 +593,26 @@ def seed_spectrastrike_federation_data(
                     "seed,client,telemetry,federation,event",
                     "approved",
                     user_id,
+                    str(ev.get("occurred_at", datetime.utcnow().isoformat() + "Z")),
+                    tenant_id,
+                ),
+            )
+            finding_id = int(c.lastrowid)
+
+        remediation_title = f"Contain and validate: {event_type} [{event_uid}] [campaign:{campaign_tag}]"
+        remediation_status = "open" if str(ev.get("severity", "medium")).lower() in {"critical", "high"} else "in_progress"
+        c.execute(
+            "SELECT id FROM remediation_tasks WHERE tenant_id=? AND title=?",
+            (tenant_id, remediation_title),
+        )
+        if not c.fetchone():
+            c.execute(
+                """INSERT INTO remediation_tasks (finding_id, title, status, created_at, tenant_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    finding_id,
+                    remediation_title,
+                    remediation_status,
                     str(ev.get("occurred_at", datetime.utcnow().isoformat() + "Z")),
                     tenant_id,
                 ),
@@ -633,7 +656,10 @@ def seed_spectrastrike_federation_data(
         campaign_tag = campaign_id or "unknown"
         client_title = f"{str(fnd.get('title', 'Telemetry finding'))} [campaign:{campaign_tag}]"
         c.execute("SELECT id FROM findings WHERE tenant_id=? AND title=?", (tenant_id, client_title))
-        if not c.fetchone():
+        row = c.fetchone()
+        if row:
+            finding_id = int(row["id"])
+        else:
             severity = str(fnd.get("severity", "medium")).lower()
             cvss = 9.1 if severity == "critical" else 8.1 if severity == "high" else 6.8 if severity == "medium" else 4.0
             c.execute(
@@ -660,6 +686,26 @@ def seed_spectrastrike_federation_data(
                     "seed,client,telemetry,federation",
                     "approved",
                     user_id,
+                    str(fnd.get("first_seen", datetime.utcnow().isoformat() + "Z")),
+                    tenant_id,
+                ),
+            )
+            finding_id = int(c.lastrowid)
+
+        remediation_title = f"Investigate and remediate: {str(fnd.get('title', 'Telemetry finding'))} [campaign:{campaign_tag}]"
+        remediation_status = "open" if str(fnd.get("severity", "medium")).lower() in {"critical", "high"} else "in_progress"
+        c.execute(
+            "SELECT id FROM remediation_tasks WHERE tenant_id=? AND title=?",
+            (tenant_id, remediation_title),
+        )
+        if not c.fetchone():
+            c.execute(
+                """INSERT INTO remediation_tasks (finding_id, title, status, created_at, tenant_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    finding_id,
+                    remediation_title,
+                    remediation_status,
                     str(fnd.get("first_seen", datetime.utcnow().isoformat() + "Z")),
                     tenant_id,
                 ),
