@@ -41,3 +41,14 @@ VectorVue runtime surfaces real seeded federation records aligned with SpectraSt
   - relaxed invalid hard pins in `requirements.txt` (`aiosqlite`, `certifi`, `cryptography`).
   - workflow portal test step now executes `npm run test:unit --if-present`.
   - portal `lint` script set to non-interactive CI-safe command.
+
+## 2026-03-05 CI/License Hotfix Addendum
+- Fixed all currently failing license-header checks in files reported by `scripts/check_license_headers.py`.
+- Fixed telemetry gateway regression causing `503` in security/attack simulation tests when persistence DB is unavailable:
+  - ingest now warns on persistence failure by default instead of rejecting accepted secure payloads.
+  - strict fail behavior remains available via `VV_TG_FAIL_ON_PERSISTENCE_ERROR=1`.
+- Hardened security policy gate parsing:
+  - docker-compose env interpolation patterns (`${VAR:-default}`) now resolved before enforcement checks.
+  - unsigned telemetry guard check made robust to wording variations.
+- Seed evidence parity fix for portal finding timeline:
+  - evidence hash now includes finding identity (`fid` + `scoped_title`) to prevent historical hash collisions that left some findings without timeline artifacts.

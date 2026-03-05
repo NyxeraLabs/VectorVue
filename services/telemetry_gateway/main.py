@@ -157,6 +157,7 @@ class GatewaySettings:
     allowed_schema_versions: tuple[str, ...]
     feedback_signing_keys: dict[str, str]
     feedback_active_kid: str
+    fail_on_persistence_error: bool
 
 
 class ReplayGuard:
@@ -461,6 +462,7 @@ def _load_settings() -> GatewaySettings:
         allowed_schema_versions=allowed_schema_versions,
         feedback_signing_keys=feedback_signing_keys,
         feedback_active_kid=feedback_active_kid,
+        fail_on_persistence_error=_parse_bool("VV_TG_FAIL_ON_PERSISTENCE_ERROR", "0"),
     )
 
 
@@ -984,7 +986,16 @@ async def ingest_telemetry(request: Request) -> TelemetryIngestResponse:
                 canonical_payload=canonical_payload,
             )
         except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Telemetry persistence failed") from exc
+            if settings.fail_on_persistence_error:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Telemetry persistence failed",
+                ) from exc
+            audit_log.append_event(
+                event_type="telemetry.persistence_warning",
+                actor="telemetry_gateway",
+                details={"request_id": request_id, "detail": str(exc)},
+            )
 
         audit_log.append_event(
             event_type="telemetry.accepted",

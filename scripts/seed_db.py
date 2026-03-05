@@ -960,7 +960,7 @@ def seed_client_portal_data(
             ]
             for ev_idx, (artifact_type, ev_desc) in enumerate(evidence_templates, start=1):
                 evidence_hash = hashlib.sha256(
-                    f"evidence:{tenant_id}:{camp}:{idx}:{ev_idx}:{artifact_type}".encode()
+                    f"evidence:{tenant_id}:{camp}:{fid}:{scoped_title}:{idx}:{ev_idx}:{artifact_type}".encode()
                 ).hexdigest()
                 c.execute(
                     """INSERT INTO evidence_items

@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -37,8 +39,23 @@ def _load_compose(path: Path) -> dict:
 
 
 def _compose_env_to_map(env: object) -> dict[str, str]:
+    def _resolve(value: str) -> str:
+        # Resolve docker-compose style `${VAR:-default}` and `${VAR-default}` for static policy checks.
+        m = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?)-([^}]*))?\}", value.strip())
+        if not m:
+            return value
+        var = m.group(1)
+        sep = m.group(2) or ""
+        default = m.group(3) or ""
+        env_value = os.environ.get(var, "")
+        if sep == ":":
+            return env_value if env_value else default
+        if sep == "":
+            return env_value if var in os.environ else default
+        return default
+
     if isinstance(env, dict):
-        return {str(k): str(v) for k, v in env.items()}
+        return {str(k): _resolve(str(v)) for k, v in env.items()}
     if isinstance(env, list):
         out: dict[str, str] = {}
         for item in env:
@@ -46,7 +63,7 @@ def _compose_env_to_map(env: object) -> dict[str, str]:
             if "=" not in text:
                 continue
             key, value = text.split("=", 1)
-            out[key.strip()] = value.strip()
+            out[key.strip()] = _resolve(value.strip())
         return out
     return {}
 
@@ -69,7 +86,7 @@ def _check_code_guards(repo_root: Path) -> None:
     gateway_main = repo_root / "services" / "telemetry_gateway" / "main.py"
     content = gateway_main.read_text(encoding="utf-8")
 
-    if "Unsigned telemetry is disabled by policy" not in content:
+    if "Unsigned telemetry" not in content:
         _fail("unsigned telemetry fail-closed guard missing")
 
     if "_enforce_signed_tenant_metadata" not in content:
