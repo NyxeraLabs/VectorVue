@@ -254,6 +254,42 @@ class DemoSessionPayload(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class FederationTimelineEvent(BaseModel):
+    event_uid: str
+    request_id: str
+    occurred_at: str
+    event_type: str
+    severity: str
+    source_system: str
+    asset_ref: str
+    message: str
+    envelope_id: str
+    signature_state: str
+    attestation_measurement_hash: str
+    policy_decision_hash: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FederationTimelineFinding(BaseModel):
+    finding_uid: str
+    request_id: str
+    title: str
+    severity: str
+    status: str
+    first_seen: str
+    asset_ref: str | None = None
+    recommendation: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FederationTimelineResponse(BaseModel):
+    tenant_id: str
+    total_events: int
+    total_findings: int
+    events: list[FederationTimelineEvent]
+    findings: list[FederationTimelineFinding]
+
+
 def _get_db() -> Session:
     db = SessionLocal()
     try:
@@ -595,6 +631,15 @@ def _count_ingest_requests(db: Session, tenant_id: str) -> int:
             {"tenant_id": tenant_id},
         ).scalar_one()
     )
+
+
+def _metadata_field(row: dict[str, Any], field: str, fallback: str = "") -> str:
+    meta = row.get("metadata_json")
+    if isinstance(meta, dict):
+        value = meta.get(field)
+        if value is not None:
+            return str(value)
+    return fallback
 
 
 @app.get("/api/v1/client/legal/documents", response_model=LegalDocumentsResponse, tags=["client-legal"])
@@ -1054,6 +1099,130 @@ def delete_demo_session(request: Request, db: Session = Depends(_get_db)):
     ).rowcount
     db.commit()
     return {"deleted": int(count or 0), "tenant_id": tenant_id}
+
+
+@app.get("/api/v1/client/federation/timeline", response_model=FederationTimelineResponse, tags=["client"])
+def federation_timeline(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=500),
+    db: Session = Depends(_get_db),
+):
+    tenant_id = str(get_current_tenant(request))
+    if not _table_exists(db, "spectrastrike_events"):
+        return FederationTimelineResponse(
+            tenant_id=tenant_id,
+            total_events=0,
+            total_findings=0,
+            events=[],
+            findings=[],
+        )
+
+    total_events = int(
+        db.execute(
+            text(
+                """SELECT COUNT(*)
+                   FROM spectrastrike_events
+                   WHERE tenant_id=CAST(:tenant_id AS UUID)"""
+            ),
+            {"tenant_id": tenant_id},
+        ).scalar_one()
+    )
+
+    event_rows = db.execute(
+        text(
+            """SELECT request_id::text AS request_id,
+                      event_uid,
+                      source_system,
+                      event_type,
+                      occurred_at::text AS occurred_at,
+                      severity,
+                      asset_ref,
+                      message,
+                      metadata_json
+               FROM spectrastrike_events
+               WHERE tenant_id=CAST(:tenant_id AS UUID)
+               ORDER BY occurred_at DESC, id DESC
+               LIMIT :limit"""
+        ),
+        {"tenant_id": tenant_id, "limit": limit},
+    ).mappings().all()
+
+    events: list[FederationTimelineEvent] = []
+    for row in event_rows:
+        row_dict = dict(row)
+        envelope_id = _metadata_field(row_dict, "envelope_id", str(row_dict.get("event_uid", "")))
+        events.append(
+            FederationTimelineEvent(
+                event_uid=str(row_dict.get("event_uid", "")),
+                request_id=str(row_dict.get("request_id", "")),
+                occurred_at=str(row_dict.get("occurred_at", "")),
+                event_type=str(row_dict.get("event_type", "")),
+                severity=str(row_dict.get("severity", "")),
+                source_system=str(row_dict.get("source_system", "")),
+                asset_ref=str(row_dict.get("asset_ref", "")),
+                message=str(row_dict.get("message", "")),
+                envelope_id=envelope_id,
+                signature_state=_metadata_field(row_dict, "signature_state", "unknown"),
+                attestation_measurement_hash=_metadata_field(row_dict, "attestation_measurement_hash", ""),
+                policy_decision_hash=_metadata_field(row_dict, "policy_decision_hash", ""),
+                metadata=row_dict.get("metadata_json") if isinstance(row_dict.get("metadata_json"), dict) else {},
+            )
+        )
+
+    findings: list[FederationTimelineFinding] = []
+    total_findings = 0
+    if _table_exists(db, "spectrastrike_findings"):
+        total_findings = int(
+            db.execute(
+                text(
+                    """SELECT COUNT(*)
+                       FROM spectrastrike_findings
+                       WHERE tenant_id=CAST(:tenant_id AS UUID)"""
+                ),
+                {"tenant_id": tenant_id},
+            ).scalar_one()
+        )
+        finding_rows = db.execute(
+            text(
+                """SELECT request_id::text AS request_id,
+                          finding_uid,
+                          title,
+                          severity,
+                          status,
+                          first_seen::text AS first_seen,
+                          asset_ref,
+                          recommendation,
+                          metadata_json
+                   FROM spectrastrike_findings
+                   WHERE tenant_id=CAST(:tenant_id AS UUID)
+                   ORDER BY first_seen DESC, id DESC
+                   LIMIT :limit"""
+            ),
+            {"tenant_id": tenant_id, "limit": max(10, min(limit, 200))},
+        ).mappings().all()
+        for row in finding_rows:
+            row_dict = dict(row)
+            findings.append(
+                FederationTimelineFinding(
+                    finding_uid=str(row_dict.get("finding_uid", "")),
+                    request_id=str(row_dict.get("request_id", "")),
+                    title=str(row_dict.get("title", "")),
+                    severity=str(row_dict.get("severity", "")),
+                    status=str(row_dict.get("status", "")),
+                    first_seen=str(row_dict.get("first_seen", "")),
+                    asset_ref=str(row_dict.get("asset_ref", "")) or None,
+                    recommendation=str(row_dict.get("recommendation", "")) or None,
+                    metadata=row_dict.get("metadata_json") if isinstance(row_dict.get("metadata_json"), dict) else {},
+                )
+            )
+
+    return FederationTimelineResponse(
+        tenant_id=tenant_id,
+        total_events=total_events,
+        total_findings=total_findings,
+        events=events,
+        findings=findings,
+    )
 
 
 @app.get("/", tags=["system"])

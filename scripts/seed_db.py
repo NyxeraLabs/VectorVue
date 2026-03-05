@@ -23,6 +23,7 @@ import json
 import os
 import sys
 import uuid
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -419,6 +420,196 @@ def resolve_active_tenant_id(db: Database) -> str | None:
 
 def _to_json(payload: dict) -> str:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+
+def _load_spectrastrike_seed_contract(path: str) -> dict[str, Any]:
+    resolved = Path(path).expanduser()
+    if not resolved.exists():
+        return {}
+    try:
+        parsed = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def seed_spectrastrike_federation_data(
+    db: Database,
+    *,
+    tenant_id: str | None,
+    seed_contract: dict[str, Any],
+) -> tuple[int, int]:
+    """Seed VectorVue federation mirror tables from SpectraStrike contract export."""
+    if not tenant_id or getattr(db, "db_backend", "").lower() != "postgres":
+        return (0, 0)
+    if not seed_contract:
+        return (0, 0)
+
+    tenants = seed_contract.get("tenants")
+    if not isinstance(tenants, list):
+        return (0, 0)
+    matching = None
+    for item in tenants:
+        if isinstance(item, dict) and str(item.get("tenant_id", "")).strip() == tenant_id:
+            matching = item
+            break
+    if not isinstance(matching, dict):
+        return (0, 0)
+
+    events = matching.get("events") if isinstance(matching.get("events"), list) else []
+    findings = matching.get("findings") if isinstance(matching.get("findings"), list) else []
+    if not events and not findings:
+        return (0, 0)
+
+    c = db.conn.cursor()
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS spectrastrike_ingest_requests (
+             request_id UUID PRIMARY KEY,
+             tenant_id UUID NOT NULL,
+             endpoint TEXT NOT NULL,
+             status TEXT NOT NULL,
+             total_items INTEGER NOT NULL DEFAULT 0,
+             accepted_items INTEGER NOT NULL DEFAULT 0,
+             failed_items INTEGER NOT NULL DEFAULT 0,
+             failed_references JSONB NOT NULL DEFAULT '[]'::jsonb,
+             idempotency_key TEXT,
+             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+           )"""
+    )
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS spectrastrike_events (
+             id BIGSERIAL PRIMARY KEY,
+             tenant_id UUID NOT NULL,
+             request_id UUID NOT NULL,
+             event_uid TEXT NOT NULL,
+             source_system TEXT NOT NULL,
+             event_type TEXT NOT NULL,
+             occurred_at TIMESTAMPTZ NOT NULL,
+             severity TEXT NOT NULL,
+             asset_ref TEXT NOT NULL,
+             message TEXT NOT NULL,
+             metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+             raw_payload JSONB NOT NULL,
+             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             UNIQUE (tenant_id, event_uid)
+           )"""
+    )
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS spectrastrike_findings (
+             id BIGSERIAL PRIMARY KEY,
+             tenant_id UUID NOT NULL,
+             request_id UUID NOT NULL,
+             finding_uid TEXT NOT NULL,
+             title TEXT NOT NULL,
+             description TEXT NOT NULL,
+             severity TEXT NOT NULL,
+             status TEXT NOT NULL,
+             first_seen TIMESTAMPTZ NOT NULL,
+             last_seen TIMESTAMPTZ,
+             asset_ref TEXT,
+             recommendation TEXT,
+             metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+             raw_payload JSONB NOT NULL,
+             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+             UNIQUE (tenant_id, finding_uid)
+           )"""
+    )
+
+    request_totals: dict[str, int] = {}
+    inserted_events = 0
+    inserted_findings = 0
+
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        request_id = str(ev.get("request_id", "")).strip()
+        event_uid = str(ev.get("event_uid", "")).strip()
+        if not request_id or not event_uid:
+            continue
+        request_totals[request_id] = request_totals.get(request_id, 0) + 1
+        metadata_json = ev.get("metadata_json") if isinstance(ev.get("metadata_json"), dict) else {}
+        raw_payload = ev.get("raw_payload") if isinstance(ev.get("raw_payload"), dict) else {}
+        c.execute(
+            """INSERT INTO spectrastrike_events
+               (tenant_id, request_id, event_uid, source_system, event_type, occurred_at, severity, asset_ref, message, metadata_json, raw_payload)
+               VALUES (CAST(? AS UUID), CAST(? AS UUID), ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), CAST(? AS JSONB))
+               ON CONFLICT (tenant_id, event_uid) DO NOTHING""",
+            (
+                tenant_id,
+                request_id,
+                event_uid,
+                str(ev.get("source_system", "spectrastrike")),
+                str(ev.get("event_type", "task.queued")),
+                str(ev.get("occurred_at", datetime.utcnow().isoformat() + "Z")),
+                str(ev.get("severity", "medium")),
+                str(ev.get("asset_ref", "unknown")),
+                str(ev.get("message", "SpectraStrike seeded event")),
+                json.dumps(metadata_json),
+                json.dumps(raw_payload),
+            ),
+        )
+        inserted_events += int(c.rowcount or 0)
+
+    for fnd in findings:
+        if not isinstance(fnd, dict):
+            continue
+        request_id = str(fnd.get("request_id", "")).strip()
+        finding_uid = str(fnd.get("finding_uid", "")).strip()
+        if not request_id or not finding_uid:
+            continue
+        metadata_json = fnd.get("metadata_json") if isinstance(fnd.get("metadata_json"), dict) else {}
+        raw_payload = fnd.get("raw_payload") if isinstance(fnd.get("raw_payload"), dict) else {}
+        c.execute(
+            """INSERT INTO spectrastrike_findings
+               (tenant_id, request_id, finding_uid, title, description, severity, status, first_seen, last_seen, asset_ref, recommendation, metadata_json, raw_payload)
+               VALUES (CAST(? AS UUID), CAST(? AS UUID), ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSONB), CAST(? AS JSONB))
+               ON CONFLICT (tenant_id, finding_uid) DO NOTHING""",
+            (
+                tenant_id,
+                request_id,
+                finding_uid,
+                str(fnd.get("title", "Telemetry finding")),
+                str(fnd.get("description", "Derived from SpectraStrike seed contract")),
+                str(fnd.get("severity", "medium")),
+                str(fnd.get("status", "triaged")),
+                str(fnd.get("first_seen", datetime.utcnow().isoformat() + "Z")),
+                str(fnd.get("last_seen", datetime.utcnow().isoformat() + "Z")),
+                str(fnd.get("asset_ref", "")),
+                str(fnd.get("recommendation", "")),
+                json.dumps(metadata_json),
+                json.dumps(raw_payload),
+            ),
+        )
+        inserted_findings += int(c.rowcount or 0)
+
+    now = datetime.utcnow().isoformat() + "Z"
+    for request_id, total in request_totals.items():
+        c.execute(
+            """INSERT INTO spectrastrike_ingest_requests
+               (request_id, tenant_id, endpoint, status, total_items, accepted_items, failed_items, failed_references, idempotency_key, created_at, updated_at)
+               VALUES (CAST(? AS UUID), CAST(? AS UUID), ?, 'accepted', ?, ?, 0, CAST(? AS JSONB), ?, ?, ?)
+               ON CONFLICT (request_id) DO UPDATE SET
+                 status='accepted',
+                 total_items=EXCLUDED.total_items,
+                 accepted_items=EXCLUDED.accepted_items,
+                 failed_items=0,
+                 updated_at=EXCLUDED.updated_at""",
+            (
+                request_id,
+                tenant_id,
+                "/internal/v1/telemetry",
+                total,
+                total,
+                "[]",
+                f"seed-{request_id}",
+                now,
+                now,
+            ),
+        )
+
+    db.conn.commit()
+    return (inserted_events, inserted_findings)
 
 
 def seed_client_portal_data(
@@ -1161,6 +1352,11 @@ def main() -> int:
         default=None,
         help="Database encryption passphrase (defaults to --global-admin-pass).",
     )
+    parser.add_argument(
+        "--spectrastrike-seed-contract",
+        default="/opt/vectorvue/local_federation/seed/spectrastrike_seed_contract.json",
+        help="Path to SpectraStrike demo-seed federation contract JSON.",
+    )
     args = parser.parse_args()
 
     if Path.cwd() != ROOT:
@@ -1223,6 +1419,18 @@ def main() -> int:
         seed_phase8_analytics_data(db, panel2_tenant_id, seeded_panel2_ids, panel2_portal_seed)
         seed_phase9_compliance_data(db, panel2_tenant_id, seeded_panel2_ids)
 
+        spectra_contract = _load_spectrastrike_seed_contract(args.spectrastrike_seed_contract)
+        panel1_fed_events, panel1_fed_findings = seed_spectrastrike_federation_data(
+            db,
+            tenant_id=panel1_tenant_id,
+            seed_contract=spectra_contract,
+        )
+        panel2_fed_events, panel2_fed_findings = seed_spectrastrike_federation_data(
+            db,
+            tenant_id=panel2_tenant_id,
+            seed_contract=spectra_contract,
+        )
+
         panel1_client1_status = ensure_user_credentials(
             db,
             args.panel1_client_user_1,
@@ -1268,11 +1476,13 @@ def main() -> int:
         print(f" - campaigns: {', '.join(name for name, _, _ in panel1_campaigns)}")
         print(f" - {args.panel1_client_user_1} / {args.panel1_client_pass_1} (role={args.panel1_client_role_1}, status={panel1_client1_status})")
         print(f" - {args.panel1_client_user_2} / {args.panel1_client_pass_2} (role={args.panel1_client_role_2}, status={panel1_client2_status})")
+        print(f" - SpectraStrike federation mirror: events={panel1_fed_events}, findings={panel1_fed_findings}")
         print("Client Panel 2:")
         print(f" - tenant: {args.panel2_tenant_name} ({panel2_tenant_id})")
         print(f" - campaigns: {', '.join(name for name, _, _ in panel2_campaigns)}")
         print(f" - {args.panel2_client_user_1} / {args.panel2_client_pass_1} (role={args.panel2_client_role_1}, status={panel2_client1_status})")
         print(f" - {args.panel2_client_user_2} / {args.panel2_client_pass_2} (role={args.panel2_client_role_2}, status={panel2_client2_status})")
+        print(f" - SpectraStrike federation mirror: events={panel2_fed_events}, findings={panel2_fed_findings}")
         if getattr(db, "db_backend", "").lower() != "postgres":
             fallback_tenant = resolve_active_tenant_id(db)
             print(f" - sqlite fallback tenant id: {fallback_tenant or 'N/A'}")

@@ -15,6 +15,8 @@ import { buildSpectraReturnUrl, isDemoQuery, nextVectorVueDemoStep } from '@/lib
 
 const emptyEnvelope = {
   envelope_id: 'n/a',
+  request_id: 'n/a',
+  event_uid: 'n/a',
   signature_state: 'unknown',
   attestation_hash: 'n/a',
   measurement_hash: 'n/a',
@@ -42,28 +44,26 @@ export default function ValidationPage() {
 
   useEffect(() => {
     let active = true;
-    fetch('/api/proxy/findings?page=1&page_size=1', { credentials: 'include', cache: 'no-store' })
+    fetch('/api/proxy/federation/timeline?limit=1', { credentials: 'include', cache: 'no-store' })
       .then((res) => res.json())
-      .then(async (body) => {
+      .then((body) => {
         if (!active) return;
-        const finding = Array.isArray(body?.items) ? body.items[0] : null;
-        if (!finding || !finding.id) {
+        const event = Array.isArray(body?.events) ? body.events[0] : null;
+        if (!event || !event.event_uid) {
           setEnvelope(emptyEnvelope);
-          setStatusLine('No findings available for validation walkthrough.');
+          setStatusLine('No federation envelope available for validation walkthrough.');
           return;
         }
-        const evidenceRes = await fetch(`/api/proxy/evidence/${finding.id}`, { credentials: 'include', cache: 'no-store' });
-        const evidenceBody = await evidenceRes.json();
-        const evidenceItems = Array.isArray(evidenceBody?.items) ? evidenceBody.items : [];
-        const evidenceRef = evidenceItems[0]?.download_url ?? `finding-${finding.id}`;
         setEnvelope({
-          envelope_id: `env-finding-${finding.id}`,
-          signature_state: String(finding.approval_status ?? 'pending'),
-          attestation_hash: `sha256:${String(evidenceRef).slice(0, 32)}`,
-          measurement_hash: `sha256:${String(finding.title ?? 'finding').slice(0, 32)}`,
-          policy_validation: String(finding.status ?? 'open')
+          envelope_id: String(event.envelope_id ?? event.event_uid ?? 'n/a'),
+          request_id: String(event.request_id ?? 'n/a'),
+          event_uid: String(event.event_uid ?? 'n/a'),
+          signature_state: String(event.signature_state ?? 'unknown'),
+          attestation_hash: String(event.attestation_measurement_hash ?? 'n/a'),
+          measurement_hash: String(event.metadata?.execution_fingerprint ?? event.event_uid ?? 'n/a'),
+          policy_validation: String(event.policy_decision_hash ?? 'unknown')
         });
-        setStatusLine('Live federation validation artifacts loaded.');
+        setStatusLine('Live SpectraStrike federation envelope loaded.');
       })
       .catch(() => {
         if (!active) return;
@@ -132,6 +132,8 @@ export default function ValidationPage() {
         <h2 className="mb-2 text-sm font-semibold">Verification Breakdown</h2>
         <ul className="space-y-2 text-sm">
           <li>Envelope intake: {envelope.envelope_id}</li>
+          <li>Request: {envelope.request_id}</li>
+          <li>Event: {envelope.event_uid}</li>
           <li>Signature check: {envelope.signature_state}</li>
           <li>Attestation verification: {envelope.attestation_hash}</li>
           <li>Measurement hash binding: {envelope.measurement_hash}</li>

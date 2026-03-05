@@ -165,6 +165,44 @@ def _sync_demo_session(step: str) -> None:
         engine.dispose()
 
 
+def _load_latest_federation_envelope() -> dict[str, str]:
+    try:
+        engine = create_engine(_db_url(), future=True)
+    except Exception:
+        return {}
+    try:
+        tenant_id = _resolve_tenant_id(engine)
+        if not tenant_id:
+            return {}
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """SELECT event_uid, request_id::text AS request_id, metadata_json
+                       FROM spectrastrike_events
+                       WHERE tenant_id=CAST(:tenant_id AS UUID)
+                       ORDER BY occurred_at DESC, id DESC
+                       LIMIT 1"""
+                ),
+                {"tenant_id": tenant_id},
+            ).mappings().first()
+            if not row:
+                return {}
+            metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
+            return {
+                "tenant_id": tenant_id,
+                "event_uid": str(row.get("event_uid") or ""),
+                "request_id": str(row.get("request_id") or ""),
+                "envelope_id": str(metadata.get("envelope_id") or row.get("event_uid") or ""),
+                "signature_state": str(metadata.get("signature_state") or "unknown"),
+                "attestation_hash": str(metadata.get("attestation_measurement_hash") or ""),
+                "policy_hash": str(metadata.get("policy_decision_hash") or ""),
+            }
+    except Exception:
+        return {}
+    finally:
+        engine.dispose()
+
+
 def _prompt_enter(prompt_fn: Callable[[str], str], output_fn: Callable[[str], None], text: str) -> None:
     output_fn(text)
     prompt_fn("Press ENTER to continue... ")
@@ -192,13 +230,26 @@ def run_assisted_demo(
         output_fn("Assisted demo skipped.")
         return state
 
-    output_fn("Using synthetic federation envelope: env-demo-0001")
+    envelope = _load_latest_federation_envelope()
+    if envelope:
+        output_fn(
+            "Using SpectraStrike federation envelope: "
+            f"{envelope.get('envelope_id', 'n/a')} "
+            f"(request={envelope.get('request_id', 'n/a')}, event={envelope.get('event_uid', 'n/a')})"
+        )
+    else:
+        output_fn("No seeded SpectraStrike federation envelope found; demo will proceed with empty federation context.")
     _prompt_enter(prompt_fn, output_fn, "Step 1: Viewing envelope intake from SpectraStrike federation channel.")
     state.step = "envelope_intake"
     save_demo_state(state, path=state_path)
     _sync_demo_session(state.step)
 
-    _prompt_validate(prompt_fn, output_fn, "Step 2: Running signature validation against trusted signing key.")
+    _prompt_validate(
+        prompt_fn,
+        output_fn,
+        "Step 2: Running signature validation against trusted signing key "
+        f"(state={envelope.get('signature_state', 'unknown') if envelope else 'unknown'}).",
+    )
     state.step = "signature_validation"
     save_demo_state(state, path=state_path)
     _sync_demo_session(state.step)
@@ -208,7 +259,12 @@ def run_assisted_demo(
     save_demo_state(state, path=state_path)
     _sync_demo_session(state.step)
 
-    _prompt_enter(prompt_fn, output_fn, "Step 4: Reviewing attestation proof for execution authenticity.")
+    _prompt_enter(
+        prompt_fn,
+        output_fn,
+        "Step 4: Reviewing attestation proof for execution authenticity "
+        f"(hash={envelope.get('attestation_hash', 'n/a') if envelope else 'n/a'}).",
+    )
     state.step = "attestation_proof"
     save_demo_state(state, path=state_path)
     _sync_demo_session(state.step)
@@ -218,7 +274,12 @@ def run_assisted_demo(
     save_demo_state(state, path=state_path)
     _sync_demo_session(state.step)
 
-    _prompt_validate(prompt_fn, output_fn, "Step 6: Running policy validation for tenant compliance outcome.")
+    _prompt_validate(
+        prompt_fn,
+        output_fn,
+        "Step 6: Running policy validation for tenant compliance outcome "
+        f"(policy={envelope.get('policy_hash', 'n/a') if envelope else 'n/a'}).",
+    )
     state.step = "policy_validation"
     save_demo_state(state, path=state_path)
     _sync_demo_session(state.step)
