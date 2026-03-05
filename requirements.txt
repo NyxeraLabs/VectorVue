@@ -21,13 +21,13 @@
 # ✘ Offer as a commercial service
 # ✘ Sell derived competing products
 
-aiosqlite==0.22.1
+aiosqlite>=0.20,<1
 brotli==1.2.0
-certifi==2026.1.4
+certifi>=2024.8.30,<2027
 cffi==2.0.0
 charset-normalizer==3.4.4
 colorama==0.4.6
-cryptography==46.0.5
+cryptography>=44,<47
 cssselect2==0.9.0
 cvss==3.1
 defusedxml==0.7.1

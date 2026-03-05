@@ -521,6 +521,77 @@ def seed_spectrastrike_federation_data(
     inserted_findings = 0
     user_id = db.current_user.id if db.current_user else None
 
+    def _campaign_pk_for_tag(campaign_tag: str) -> int | None:
+        normalized = campaign_tag.strip()
+        if not normalized or normalized == "unknown":
+            return None
+        if normalized.isdigit():
+            return int(normalized)
+        c.execute("SELECT id FROM campaigns WHERE tenant_id=? AND name=?", (tenant_id, normalized))
+        row = c.fetchone()
+        if row and row.get("id") is not None:
+            return int(row["id"])
+        return None
+
+    def _seed_finding_evidence(*, finding_id: int, campaign_tag: str, occurred_at: str, title: str, description: str, technique: str) -> None:
+        campaign_pk = _campaign_pk_for_tag(campaign_tag)
+        evidence_rows = [
+            ("log", f"Federation ingest log for {title}: {description}"),
+            ("json", f"Envelope metadata snapshot for {title}"),
+            ("timeline", f"Timeline checkpoint registered for {title}"),
+        ]
+        for offset, (artifact_type, evidence_description) in enumerate(evidence_rows, start=1):
+            evidence_hash = hashlib.sha256(
+                f"fed-evidence:{tenant_id}:{finding_id}:{artifact_type}:{title}:{offset}".encode()
+            ).hexdigest()
+            c.execute(
+                """INSERT INTO evidence_items
+                   (campaign_id, finding_id, artifact_type, description, sha256_hash, collected_by,
+                    collection_method, collected_timestamp, source_host, technique_id,
+                    approval_status, approved_by, approval_timestamp, immutable, tenant_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT (sha256_hash) DO NOTHING""",
+                (
+                    campaign_pk,
+                    finding_id,
+                    artifact_type,
+                    evidence_description,
+                    evidence_hash,
+                    user_id,
+                    "federation_contract_import",
+                    occurred_at,
+                    "spectrastrike.federation",
+                    technique,
+                    "approved",
+                    user_id,
+                    occurred_at,
+                    1,
+                    tenant_id,
+                ),
+            )
+            c.execute(
+                """INSERT INTO activity_log
+                   (campaign_id, actor, action_type, target_type, target_id, timestamp, context_json, severity)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    campaign_pk,
+                    "federation-ingest",
+                    "EVIDENCE_INGESTED",
+                    "finding",
+                    str(finding_id),
+                    occurred_at,
+                    json.dumps(
+                        {
+                            "artifact_type": artifact_type,
+                            "source": "spectrastrike",
+                            "tenant_id": tenant_id,
+                            "evidence_hash": evidence_hash,
+                        }
+                    ),
+                    "info",
+                ),
+            )
+
     for ev in events:
         if not isinstance(ev, dict):
             continue
@@ -617,6 +688,14 @@ def seed_spectrastrike_federation_data(
                     tenant_id,
                 ),
             )
+        _seed_finding_evidence(
+            finding_id=finding_id,
+            campaign_tag=campaign_tag,
+            occurred_at=str(ev.get("occurred_at", datetime.utcnow().isoformat() + "Z")),
+            title=event_type,
+            description=str(ev.get("message", "SpectraStrike seeded event")),
+            technique="T1021",
+        )
 
     for fnd in findings:
         if not isinstance(fnd, dict):
@@ -710,6 +789,14 @@ def seed_spectrastrike_federation_data(
                     tenant_id,
                 ),
             )
+        _seed_finding_evidence(
+            finding_id=finding_id,
+            campaign_tag=campaign_tag,
+            occurred_at=str(fnd.get("first_seen", datetime.utcnow().isoformat() + "Z")),
+            title=str(fnd.get("title", "Telemetry finding")),
+            description=str(fnd.get("description", "Derived from SpectraStrike seed contract")),
+            technique="T1005",
+        )
 
     now = datetime.utcnow().isoformat() + "Z"
     for request_id, total in request_totals.items():

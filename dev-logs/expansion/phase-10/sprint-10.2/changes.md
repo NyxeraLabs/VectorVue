@@ -30,3 +30,14 @@ VectorVue runtime surfaces real seeded federation records aligned with SpectraSt
   - seeded federated events/findings now generate campaign-tagged remediation tasks (`Contain and validate...` / `Investigate and remediate...`) linked to imported findings.
 - Local federation DNS support:
   - `local_federation/federation-compose.override.yml` adds `vectorvue.local` alias on nginx service network for secure cross-stack sync.
+
+## 2026-03-05 Final Addendum
+- Theme quality pass:
+  - Updated portal dark/light design tokens for cleaner contrast and more consistent visual language.
+- Demo-seed evidence parity upgrade:
+  - `seed_spectrastrike_federation_data` now seeds evidence artifacts for imported federation findings/events.
+  - Added timeline-like evidence activity rows in `activity_log` per seeded artifact.
+- CI/workflow reliability updates:
+  - relaxed invalid hard pins in `requirements.txt` (`aiosqlite`, `certifi`, `cryptography`).
+  - workflow portal test step now executes `npm run test:unit --if-present`.
+  - portal `lint` script set to non-interactive CI-safe command.

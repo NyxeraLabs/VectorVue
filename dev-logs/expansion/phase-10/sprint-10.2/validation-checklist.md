@@ -9,3 +9,10 @@
 - [x] Portal runtime build validated in Docker build pipeline.
 - [x] Remediation tracker includes federation-derived campaign-tagged tasks after seed.
 - [ ] TUI assisted demo manually validated against seeded federation records.
+
+## 2026-03-05 Final Addendum
+- [x] `python3 -m py_compile scripts/seed_db.py`
+- [x] `npm --prefix portal run test:unit`
+- [x] Workflow files updated for portal unit test execution in CI.
+- [x] Federation seed path now writes evidence + evidence timeline activity rows for imported findings/events.
+- [ ] `npm --prefix portal run build` (blocked in this environment: portal dependencies not installed locally)

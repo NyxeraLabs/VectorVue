@@ -88,7 +88,7 @@ jobs:
           fi
 
       - name: Run tests (if available)
-        run: npm test --if-present
+        run: npm run test:unit --if-present
 
       - name: Build
         run: npm run build

@@ -14,3 +14,12 @@
 - Remediation seeding behavior:
   - Federation event findings create `remediation_tasks` with status derived from severity (`open` for high/critical, otherwise `in_progress`).
   - Federation findings also create campaign-tagged remediation tasks linked to corresponding imported finding IDs.
+
+## 2026-03-05 Final Addendum
+- Federation seed evidence implementation details:
+  - Added `_seed_finding_evidence(...)` helper in `scripts/seed_db.py`.
+  - Inserts approved artifacts (`log`, `json`, `timeline`) into `evidence_items` with deterministic hashes.
+  - Inserts matching `activity_log` entries with `action_type=EVIDENCE_INGESTED` and federation context JSON.
+  - Campaign FK resolution for evidence uses tenant campaign lookup by imported campaign tag when available.
+- CI behavior:
+  - `ci.yml` and `release.yml` now use `npm run test:unit --if-present` for portal validation.

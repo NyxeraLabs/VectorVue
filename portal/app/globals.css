@@ -20,55 +20,57 @@ You may NOT:
 
 :root {
   color-scheme: dark;
-  --vv-bg-primary: #0A0F2D;
-  --vv-bg-secondary: #121735;
-  --vv-accent: #8A2BE2;
-  --vv-accent-hover: #9D4DFF;
+  --vv-bg-primary: #081225;
+  --vv-bg-secondary: #0f1d34;
+  --vv-accent: #3f7cff;
+  --vv-accent-hover: #5690ff;
   --vv-success: #00C896;
   --vv-warning: #FFB020;
   --vv-error: #FF4D4F;
-  --vv-text-primary: #E6E9F2;
-  --vv-text-secondary: #AAB2D5;
-  --vv-border-subtle: rgba(255, 255, 255, 0.05);
+  --vv-text-primary: #e8eefb;
+  --vv-text-secondary: #a6b4d1;
+  --vv-border-subtle: rgba(154, 176, 213, 0.24);
   --vv-metallic-gradient: linear-gradient(90deg, #D9E1F2 0%, #FFFFFF 50%, #C7CEDB 100%);
-  --vv-bg-primary-rgb: 10 15 45;
-  --vv-bg-secondary-rgb: 18 23 53;
-  --vv-accent-rgb: 138 43 226;
-  --vv-accent-hover-rgb: 157 77 255;
+  --vv-bg-primary-rgb: 8 18 37;
+  --vv-bg-secondary-rgb: 15 29 52;
+  --vv-accent-rgb: 63 124 255;
+  --vv-accent-hover-rgb: 86 144 255;
   --vv-success-rgb: 0 200 150;
   --vv-warning-rgb: 255 176 32;
   --vv-error-rgb: 255 77 79;
-  --vv-text-primary-rgb: 230 233 242;
-  --vv-text-secondary-rgb: 170 178 213;
+  --vv-text-primary-rgb: 232 238 251;
+  --vv-text-secondary-rgb: 166 180 209;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --vv-bg-primary: #f1f4fb;
+  --vv-bg-primary: #eef4fb;
   --vv-bg-secondary: #ffffff;
-  --vv-accent: #2c56d8;
-  --vv-accent-hover: #234ac5;
+  --vv-accent: #2353d2;
+  --vv-accent-hover: #1d45bd;
   --vv-success: #138a4b;
   --vv-warning: #b67900;
   --vv-error: #d23034;
-  --vv-text-primary: #1d2a44;
-  --vv-text-secondary: #4e5f84;
-  --vv-border-subtle: rgba(29, 42, 68, 0.15);
+  --vv-text-primary: #162847;
+  --vv-text-secondary: #4a6088;
+  --vv-border-subtle: rgba(22, 40, 71, 0.18);
   --vv-metallic-gradient: linear-gradient(90deg, #1d2a44 0%, #2c56d8 55%, #1d2a44 100%);
-  --vv-bg-primary-rgb: 241 244 251;
+  --vv-bg-primary-rgb: 238 244 251;
   --vv-bg-secondary-rgb: 255 255 255;
-  --vv-accent-rgb: 44 86 216;
-  --vv-accent-hover-rgb: 35 74 197;
+  --vv-accent-rgb: 35 83 210;
+  --vv-accent-hover-rgb: 29 69 189;
   --vv-success-rgb: 19 138 75;
   --vv-warning-rgb: 182 121 0;
   --vv-error-rgb: 210 48 52;
-  --vv-text-primary-rgb: 29 42 68;
-  --vv-text-secondary-rgb: 78 95 132;
+  --vv-text-primary-rgb: 22 40 71;
+  --vv-text-secondary-rgb: 74 96 136;
 }
 
 body {
   @apply bg-bg-primary text-text-primary font-sans;
-  background-image: radial-gradient(circle at 20% 0%, rgb(var(--vv-accent-rgb) / 0.18) 0%, transparent 32%);
+  background-image:
+    radial-gradient(circle at 12% 6%, rgb(var(--vv-accent-rgb) / 0.18) 0%, transparent 35%),
+    radial-gradient(circle at 90% 8%, rgb(var(--vv-success-rgb) / 0.1) 0%, transparent 28%);
 }
 
 *:focus-visible {
